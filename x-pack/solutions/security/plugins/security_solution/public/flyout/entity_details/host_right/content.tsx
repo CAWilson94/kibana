@@ -49,7 +49,9 @@ export const HostPanelContent = ({
 
   return (
     <FlyoutBody>
-      {riskScoreState.hasEngineBeenInstalled && riskScoreState.data?.length !== 0 && (
+      {Array.isArray(riskScoreState.data) &&
+    riskScoreState.isModuleEnabled &&
+    riskScoreState.data.length > 0 && (
         <>
           <FlyoutRiskSummary
             entityType={EntityType.host}
