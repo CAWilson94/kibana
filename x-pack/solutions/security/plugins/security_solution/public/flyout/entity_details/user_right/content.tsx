@@ -43,6 +43,7 @@ interface UserPanelContentProps {
   openDetailsPanel: (path: EntityDetailsPath) => void;
   isPreviewMode: boolean;
   entityRecord?: Entity;
+  refetchEntityRecord?: () => void;
   /** When true (e.g. entity store v2 enabled but no entity found), hide risk score and asset criticality. */
   skipRiskAndCriticality?: boolean;
   entityStoreEntityId?: string;
@@ -62,6 +63,7 @@ export const UserPanelContent = ({
   onAssetCriticalityChange,
   isPreviewMode,
   entityRecord,
+  refetchEntityRecord,
   skipRiskAndCriticality = false,
   entityStoreEntityId,
   prefetchedResolutionRisk,
@@ -80,6 +82,7 @@ export const UserPanelContent = ({
           entityIdentifier={entityRecord ? entityRecord.entity.id : userName}
           entityType={EntityType.user}
           entityRecord={entityRecord}
+          refetchEntityRecord={refetchEntityRecord}
         />
       )}
       {!skipRiskAndCriticality &&

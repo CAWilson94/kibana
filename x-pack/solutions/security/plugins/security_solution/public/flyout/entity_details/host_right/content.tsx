@@ -40,6 +40,8 @@ interface HostPanelContentProps {
   isPreviewMode: boolean;
   /** When using Entity Store v2: entity record for asset criticality upsert. */
   entityRecord?: Entity;
+  /** Refetch entity store record after AI summary persist (v2). */
+  refetchEntityRecord?: () => void;
   /** When true (e.g. entity store v2 enabled but no entity found), hide risk score and asset criticality. */
   skipRiskAndCriticality?: boolean;
   entityStoreEntityId?: string;
@@ -59,6 +61,7 @@ export const HostPanelContent = ({
   onAssetCriticalityChange,
   isPreviewMode,
   entityRecord,
+  refetchEntityRecord,
   skipRiskAndCriticality = false,
   entityStoreEntityId,
   prefetchedResolutionRisk,
@@ -77,6 +80,7 @@ export const HostPanelContent = ({
           entityIdentifier={entityRecord ? entityRecord.entity.id : hostName}
           entityType={EntityType.host}
           entityRecord={entityRecord}
+          refetchEntityRecord={refetchEntityRecord}
         />
       )}
       {!skipRiskAndCriticality &&
