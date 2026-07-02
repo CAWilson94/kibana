@@ -209,9 +209,9 @@ describe('TemporalStateModule', () => {
           bool: { filter: Array<Record<string, unknown>> };
         };
         const termsFilter = query.bool.filter[0] as { terms: Record<string, string[]> };
-        const chunk = termsFilter.terms['user.name'];
+        const chunk = termsFilter.terms['entity.id'];
 
-        // Report the first name in this chunk as an escalation, proving every
+        // Report the first EUID in this chunk as an escalation, proving every
         // chunk was queried and merged (not just the last one).
         return Promise.resolve(
           mockSnapshotResponse([{ key: chunk[0], wasPrivileged: false }]) as never
@@ -229,7 +229,7 @@ describe('TemporalStateModule', () => {
           bool: { filter: Array<Record<string, unknown>> };
         };
         const termsFilter = query.bool.filter[0] as { terms: Record<string, string[]> };
-        expect(termsFilter.terms['user.name'].length).toBeLessThanOrEqual(
+        expect(termsFilter.terms['entity.id'].length).toBeLessThanOrEqual(
           DEFAULT_MAX_TERMS_QUERY_COUNT
         );
       }

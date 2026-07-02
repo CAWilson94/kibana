@@ -158,10 +158,10 @@ describe('RiskScoreDataClient', () => {
       jest.clearAllMocks();
     });
 
-    it('returns an empty map without querying ES when entityNames is empty', async () => {
+    it('returns an empty map without querying ES when entityIds is empty', async () => {
       const result = await riskScoreDataClient.getDailyAverageRiskScoreNormSeries({
         entityType: 'host',
-        entityNames: [],
+        entityIds: [],
       });
 
       expect(result.size).toBe(0);
@@ -190,23 +190,25 @@ describe('RiskScoreDataClient', () => {
 
       const result = await riskScoreDataClient.getDailyAverageRiskScoreNormSeries({
         entityType: 'host',
-        entityNames: ['server-1'],
+        entityIds: ['server-1'],
       });
 
       expect(esClient.search).toHaveBeenCalledTimes(1);
-      expect(result.get('host:server-1')).toEqual([42, 55]);
+      expect(result.get('server-1')).toEqual([42, 55]);
     });
 
     it('batches the terms query so a single request never exceeds the ES max_terms_count limit', async () => {
       const totalEntities = DEFAULT_MAX_TERMS_QUERY_COUNT + 2000;
-      const entityNames = Array.from({ length: totalEntities }, (_, i) => `host-${i}`);
+      const entityIds = Array.from({ length: totalEntities }, (_, i) => `host-${i}`);
 
       esClient.search.mockImplementation((params) => {
         const query = (params as Record<string, unknown>).query as {
           bool: { filter: Array<Record<string, unknown>> };
         };
-        const termsFilter = query.bool.filter[0] as { terms: Record<string, string[]> };
-        const chunk = termsFilter.terms['host.name'];
+        const termsFilter = query.bool.filter.find(
+          (f) => (f.terms as Record<string, unknown> | undefined)?.['host.risk.id_value']
+        ) as { terms: Record<string, string[]> };
+        const chunk = termsFilter.terms['host.risk.id_value'];
 
         return Promise.resolve({
           aggregations: {
@@ -224,7 +226,7 @@ describe('RiskScoreDataClient', () => {
 
       const result = await riskScoreDataClient.getDailyAverageRiskScoreNormSeries({
         entityType: 'host',
-        entityNames,
+        entityIds,
       });
 
       // ceil(67535 / 65535) = 2 queries
@@ -234,15 +236,17 @@ describe('RiskScoreDataClient', () => {
         const query = (params as Record<string, unknown>).query as {
           bool: { filter: Array<Record<string, unknown>> };
         };
-        const termsFilter = query.bool.filter[0] as { terms: Record<string, string[]> };
-        expect(termsFilter.terms['host.name'].length).toBeLessThanOrEqual(
+        const termsFilter = query.bool.filter.find(
+          (f) => (f.terms as Record<string, unknown> | undefined)?.['host.risk.id_value']
+        ) as { terms: Record<string, string[]> };
+        expect(termsFilter.terms['host.risk.id_value'].length).toBeLessThanOrEqual(
           DEFAULT_MAX_TERMS_QUERY_COUNT
         );
       }
 
       // Results from the first chunk and the second chunk both need to survive the merge.
-      expect(result.has('host:host-0')).toBe(true);
-      expect(result.has(`host:host-${DEFAULT_MAX_TERMS_QUERY_COUNT}`)).toBe(true);
+      expect(result.has('host-0')).toBe(true);
+      expect(result.has(`host-${DEFAULT_MAX_TERMS_QUERY_COUNT}`)).toBe(true);
     });
   });
 
