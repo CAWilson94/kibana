@@ -16,7 +16,7 @@ const EntityAttachmentMetadataSchema = z
     /** The kind of entity (user, host, service, generic). */
     entityType: EntityType,
     /** Optional risk score (0-100) captured at attach time. */
-    riskScore: z.number().optional(),
+    riskScore: z.number().min(0).max(100).optional(),
     /** Optional risk level (e.g. Low, Moderate, High, Critical) captured at attach time. */
     riskLevel: z.string().max(50).optional(),
   })
