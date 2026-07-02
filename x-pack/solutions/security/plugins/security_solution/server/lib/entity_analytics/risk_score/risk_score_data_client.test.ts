@@ -15,7 +15,11 @@ import {
   savedObjectsClientMock,
 } from '@kbn/core/server/mocks';
 
-import { RiskScoreDataClient } from './risk_score_data_client';
+import {
+  RiskScoreDataClient,
+  estimateLookbackDays,
+  riskScoreSeriesEntityBatchSize,
+} from './risk_score_data_client';
 
 import { createDataStream } from '../utils/create_datastream';
 
@@ -197,56 +201,86 @@ describe('RiskScoreDataClient', () => {
       expect(result.get('server-1')).toEqual([42, 55]);
     });
 
-    it('batches the terms query so a single request never exceeds the ES max_terms_count limit', async () => {
+    // Elasticsearch's default `search.max_buckets`; a request whose aggregations
+    // generate more than this is rejected with `too_many_buckets_exception`.
+    const ES_DEFAULT_MAX_BUCKETS = 65536;
+    const DEFAULT_LOOKBACK_RANGE = { gte: 'now-90d', lte: 'now' } as const;
+
+    const chunkOf = (params: unknown): string[] => {
+      const query = (params as Record<string, unknown>).query as {
+        bool: { filter: Array<Record<string, unknown>> };
+      };
+      const termsFilter = query.bool.filter.find(
+        (f) => (f.terms as Record<string, unknown> | undefined)?.['host.risk.id_value']
+      ) as { terms: Record<string, string[]> };
+      return termsFilter.terms['host.risk.id_value'];
+    };
+
+    // Echo a bucket for every entity in the chunk, so a dropped batch would leave a
+    // detectable gap in the merged result.
+    const echoChunkBuckets = (params: unknown) =>
+      Promise.resolve({
+        aggregations: {
+          by_entity: {
+            buckets: chunkOf(params).map((key) => ({
+              key,
+              scores_over_time: { buckets: [{ avg_score: { value: 10 } }] },
+            })),
+          },
+        },
+      } as never);
+
+    it('batches so a single request stays under both the terms-query and max_buckets limits', async () => {
       const totalEntities = DEFAULT_MAX_TERMS_QUERY_COUNT + 2000;
       const entityIds = Array.from({ length: totalEntities }, (_, i) => `host-${i}`);
-
-      esClient.search.mockImplementation((params) => {
-        const query = (params as Record<string, unknown>).query as {
-          bool: { filter: Array<Record<string, unknown>> };
-        };
-        const termsFilter = query.bool.filter.find(
-          (f) => (f.terms as Record<string, unknown> | undefined)?.['host.risk.id_value']
-        ) as { terms: Record<string, string[]> };
-        const chunk = termsFilter.terms['host.risk.id_value'];
-
-        return Promise.resolve({
-          aggregations: {
-            by_entity: {
-              buckets: [
-                {
-                  key: chunk[0],
-                  scores_over_time: { buckets: [{ avg_score: { value: 10 } }] },
-                },
-              ],
-            },
-          },
-        } as never);
-      });
+      esClient.search.mockImplementation(echoChunkBuckets);
 
       const result = await riskScoreDataClient.getDailyAverageRiskScoreNormSeries({
         entityType: 'host',
         entityIds,
       });
 
-      // ceil(67535 / 65535) = 2 queries
-      expect(esClient.search).toHaveBeenCalledTimes(2);
+      // With the default 90-day daily histogram the batch is bucket-bound (~652), far
+      // below the terms limit, so many more than the naive 2 requests are issued.
+      const expectedBatchSize = riskScoreSeriesEntityBatchSize(DEFAULT_LOOKBACK_RANGE);
+      expect(esClient.search).toHaveBeenCalledTimes(Math.ceil(totalEntities / expectedBatchSize));
 
+      const bucketsPerEntity = estimateLookbackDays(DEFAULT_LOOKBACK_RANGE) + 2;
       for (const [params] of esClient.search.mock.calls) {
-        const query = (params as Record<string, unknown>).query as {
-          bool: { filter: Array<Record<string, unknown>> };
-        };
-        const termsFilter = query.bool.filter.find(
-          (f) => (f.terms as Record<string, unknown> | undefined)?.['host.risk.id_value']
-        ) as { terms: Record<string, string[]> };
-        expect(termsFilter.terms['host.risk.id_value'].length).toBeLessThanOrEqual(
-          DEFAULT_MAX_TERMS_QUERY_COUNT
-        );
+        const chunk = chunkOf(params);
+        expect(chunk.length).toBeLessThanOrEqual(DEFAULT_MAX_TERMS_QUERY_COUNT);
+        // The projected bucket count for this request must fit under the ES ceiling.
+        expect(chunk.length * bucketsPerEntity).toBeLessThanOrEqual(ES_DEFAULT_MAX_BUCKETS);
       }
 
-      // Results from the first chunk and the second chunk both need to survive the merge.
+      // Every batch's results must survive the merge — spot-check the first and last entity.
       expect(result.has('host-0')).toBe(true);
-      expect(result.has(`host-${DEFAULT_MAX_TERMS_QUERY_COUNT}`)).toBe(true);
+      expect(result.has(`host-${totalEntities - 1}`)).toBe(true);
+    });
+
+    it('shrinks the batch further for longer lookbacks so buckets stay bounded', async () => {
+      const longRange = { gte: 'now-2y', lte: 'now' };
+      const batchSize = riskScoreSeriesEntityBatchSize(longRange);
+      const totalEntities = batchSize * 2 + 5;
+      const entityIds = Array.from({ length: totalEntities }, (_, i) => `host-${i}`);
+      esClient.search.mockImplementation(echoChunkBuckets);
+
+      await riskScoreDataClient.getDailyAverageRiskScoreNormSeries({
+        entityType: 'host',
+        entityIds,
+        lookbackRange: longRange,
+      });
+
+      // A 2-year daily window packs far fewer entities per request than a 90-day one.
+      expect(batchSize).toBeLessThan(riskScoreSeriesEntityBatchSize(DEFAULT_LOOKBACK_RANGE));
+      expect(esClient.search).toHaveBeenCalledTimes(Math.ceil(totalEntities / batchSize));
+
+      const bucketsPerEntity = estimateLookbackDays(longRange) + 2;
+      for (const [params] of esClient.search.mock.calls) {
+        expect(chunkOf(params).length * bucketsPerEntity).toBeLessThanOrEqual(
+          ES_DEFAULT_MAX_BUCKETS
+        );
+      }
     });
   });
 
@@ -585,6 +619,39 @@ describe('RiskScoreDataClient', () => {
       });
 
       expect(result.size).toBe(0);
+    });
+  });
+});
+
+describe('getDailyAverageRiskScoreNormSeries batching helpers', () => {
+  describe('estimateLookbackDays', () => {
+    it('parses relative day/week/year ranges to an upper-bound day span', () => {
+      expect(estimateLookbackDays({ gte: 'now-90d', lte: 'now' })).toBe(90);
+      expect(estimateLookbackDays({ gte: 'now-12w', lte: 'now' })).toBe(84);
+      expect(estimateLookbackDays({ gte: 'now-2y', lte: 'now' })).toBe(732);
+    });
+
+    it('never returns less than one day', () => {
+      expect(estimateLookbackDays({ gte: 'now', lte: 'now' })).toBe(1);
+    });
+
+    it('falls back to a conservative one-year span for unparseable ranges', () => {
+      expect(estimateLookbackDays({ gte: 'now-90d/d', lte: 'now' })).toBe(366);
+    });
+  });
+
+  describe('riskScoreSeriesEntityBatchSize', () => {
+    it('keeps projected buckets under the ES max_buckets ceiling', () => {
+      const range = { gte: 'now-90d', lte: 'now' };
+      const batchSize = riskScoreSeriesEntityBatchSize(range);
+      const bucketsPerEntity = estimateLookbackDays(range) + 2;
+      expect(batchSize * bucketsPerEntity).toBeLessThanOrEqual(65536);
+    });
+
+    it('shrinks as the lookback window grows', () => {
+      const shortWindow = riskScoreSeriesEntityBatchSize({ gte: 'now-30d', lte: 'now' });
+      const longWindow = riskScoreSeriesEntityBatchSize({ gte: 'now-2y', lte: 'now' });
+      expect(longWindow).toBeLessThan(shortWindow);
     });
   });
 });
