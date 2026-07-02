@@ -397,9 +397,9 @@ describe('BehavioralAnalysisModule', () => {
           bool: { filter: Array<Record<string, unknown>> };
         };
         const termsFilter = query.bool.filter.find(
-          (f) => (f.terms as Record<string, unknown> | undefined)?.['entity_id_user']
+          (f) => (f.terms as Record<string, unknown> | undefined)?.entity_id_user
         ) as { terms: Record<string, string[]> };
-        const chunk = termsFilter.terms['entity_id_user'];
+        const chunk = termsFilter.terms.entity_id_user;
 
         // Echo back a bucket for the first EUID in this chunk only, so we can
         // prove that every chunk was actually queried and merged (not just the last one).
@@ -427,9 +427,9 @@ describe('BehavioralAnalysisModule', () => {
           bool: { filter: Array<Record<string, unknown>> };
         };
         const termsFilter = query.bool.filter.find(
-          (f) => (f.terms as Record<string, unknown> | undefined)?.['entity_id_user']
+          (f) => (f.terms as Record<string, unknown> | undefined)?.entity_id_user
         ) as { terms: Record<string, string[]> };
-        expect(termsFilter.terms['entity_id_user'].length).toBeLessThanOrEqual(
+        expect(termsFilter.terms.entity_id_user.length).toBeLessThanOrEqual(
           DEFAULT_MAX_TERMS_QUERY_COUNT
         );
       }

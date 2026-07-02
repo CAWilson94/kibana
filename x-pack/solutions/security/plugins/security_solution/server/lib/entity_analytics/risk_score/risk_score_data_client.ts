@@ -677,6 +677,9 @@ export const riskScoreSeriesEntityBatchSize = (range: {
 }): number => {
   // +2 per entity: one for the entity's own terms bucket, one for histogram edge headroom.
   const bucketsPerEntity = estimateLookbackDays(range) + 2;
-  const bucketSafeBatchSize = Math.max(1, Math.floor(MAX_RISK_SCORE_AGG_BUCKETS / bucketsPerEntity));
+  const bucketSafeBatchSize = Math.max(
+    1,
+    Math.floor(MAX_RISK_SCORE_AGG_BUCKETS / bucketsPerEntity)
+  );
   return Math.min(DEFAULT_MAX_TERMS_QUERY_COUNT, bucketSafeBatchSize);
 };
