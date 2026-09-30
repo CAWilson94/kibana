@@ -33,12 +33,13 @@ import {
 } from '../components/home/use_entity_filters_param';
 import { EntityFiltersBar } from '../components/home/entity_filters_bar';
 import {
-  useAlertBasedTiles,
   useEntitiesWithAnomaliesCount,
   useNewEntityCount,
   useRiskMoversCount,
   useNewlyHighCriticalCount,
 } from '../components/home/needs_attention_tiles/hooks';
+// Switch to useAlertBasedTiles to disable deltas, useAlertBasedTilesWithDelta to enable them.
+import { useAlertBasedTilesWithDelta as useAlertBasedTiles } from '../components/home/needs_attention_tiles/hooks/use_entities_with_alerts_tiles';
 import { SignalCards } from '../components/home/needs_attention_tiles/signal_cards';
 import {
   EMPTY_ENTITY_IDS,
@@ -142,8 +143,10 @@ export const EntityAnalyticsNewHomePage: React.FC = () => {
 
   const {
     alertsCount,
+    alertsDelta,
     alertsEntityIds,
     watchlistedCount,
+    watchlistedDelta,
     watchlistedEntityIds,
     isLoading: alertBasedLoading,
   } = useAlertBasedTiles({
@@ -276,6 +279,7 @@ export const EntityAnalyticsNewHomePage: React.FC = () => {
           }
         ),
         value: alertsCount,
+        delta: alertsDelta,
         isLoading: alertBasedLoading,
         description: i18n.translate(
           'xpack.securitySolution.entityAnalytics.home.tiles.entitiesWithAlerts.description',
@@ -406,6 +410,7 @@ export const EntityAnalyticsNewHomePage: React.FC = () => {
           }
         ),
         value: watchlistedCount,
+        delta: watchlistedDelta,
         isLoading: alertBasedLoading,
         description: i18n.translate(
           'xpack.securitySolution.entityAnalytics.home.tiles.watchlisted.description',
@@ -448,6 +453,7 @@ export const EntityAnalyticsNewHomePage: React.FC = () => {
     ],
     [
       alertsCount,
+      alertsDelta,
       alertBasedLoading,
       anomaliesCount,
       anomaliesLoading,
@@ -457,6 +463,7 @@ export const EntityAnalyticsNewHomePage: React.FC = () => {
       newlyHCLoading,
       newlyHCMissingIndex,
       watchlistedCount,
+      watchlistedDelta,
       newEntityCount,
       newEntityLoading,
       riskMoversMissingIndex,

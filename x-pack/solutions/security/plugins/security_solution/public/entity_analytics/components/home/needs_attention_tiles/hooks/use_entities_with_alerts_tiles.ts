@@ -15,7 +15,10 @@ import { useEntityStoreEuidApi } from '@kbn/entity-store/public';
 import { useErrorToast } from '../../../../../common/hooks/use_error_toast';
 import { useKibana } from '../../../../../common/lib/kibana';
 import { useResolvedLatestEntitiesIndexName } from '../../../../../common/hooks/use_resolved_latest_entities_index_name';
-import { buildAlertBasedTilesQuery } from '../queries/entities_with_alerts_query';
+import {
+  buildAlertBasedTilesQuery,
+  buildAlertBasedTilesQueryWithDelta,
+} from '../queries/entities_with_alerts_query';
 import type { TimeRange } from '../../use_time_range_param';
 import { EMPTY_ENTITY_IDS } from '../data';
 import {
@@ -29,6 +32,11 @@ interface AlertBasedTilesResult {
   alertsEntityIds: string[];
   watchlistedCount: number;
   watchlistedEntityIds: string[];
+}
+
+interface AlertBasedTilesResultWithDelta extends AlertBasedTilesResult {
+  alertsPrevCount: number;
+  watchlistedPrevCount: number;
 }
 
 export const parseAlertBasedTilesResponse = (raw: ESQLSearchResponse): AlertBasedTilesResult => {
@@ -54,6 +62,27 @@ export const parseAlertBasedTilesResponse = (raw: ESQLSearchResponse): AlertBase
         ? (row[col('watchlisted_count')] as number)
         : 0,
     watchlistedEntityIds: toIds(col('watchlisted_entity_ids')),
+  };
+};
+
+export const parseAlertBasedTilesResponseWithDelta = (
+  raw: ESQLSearchResponse
+): AlertBasedTilesResultWithDelta => {
+  const base = parseAlertBasedTilesResponse(raw);
+  const row = raw.values?.[0];
+  if (!row) return { ...base, alertsPrevCount: 0, watchlistedPrevCount: 0 };
+
+  const col = (name: string) => raw.columns?.findIndex((c) => c.name === name) ?? -1;
+  return {
+    ...base,
+    alertsPrevCount:
+      typeof row[col('alerts_prev_count')] === 'number'
+        ? (row[col('alerts_prev_count')] as number)
+        : 0,
+    watchlistedPrevCount:
+      typeof row[col('watchlisted_prev_count')] === 'number'
+        ? (row[col('watchlisted_prev_count')] as number)
+        : 0,
   };
 };
 
@@ -143,6 +172,109 @@ export const useAlertBasedTiles = ({
       ? EMPTY_ENTITY_IDS
       : queryResult?.alertsEntityIds ?? EMPTY_ENTITY_IDS,
     watchlistedCount: queryResult?.watchlistedCount ?? 0,
+    watchlistedEntityIds: isFetching
+      ? EMPTY_ENTITY_IDS
+      : queryResult?.watchlistedEntityIds ?? EMPTY_ENTITY_IDS,
+    isLoading: isIndexLoading || isLoading || isFetching,
+    error: filteredError ?? indexError,
+  };
+};
+
+/**
+ * Delta variant of useAlertBasedTiles.
+ *
+ * Runs buildAlertBasedTilesQueryWithDelta — a single 2× fetch window query that
+ * returns both the current-period count and the previous-period count so the UI
+ * can show "+N vs previous period" without a second network request.
+ *
+ * Switch between this and useAlertBasedTiles at the call site to compare results.
+ */
+export const useAlertBasedTilesWithDelta = ({
+  spaceId,
+  skip,
+  timeRange = '24h',
+  entityFilters = EMPTY_ENTITY_FILTERS,
+}: {
+  spaceId: string;
+  skip?: boolean;
+  timeRange?: TimeRange;
+  entityFilters?: EntityFilters;
+}) => {
+  const { data } = useKibana().services;
+  const euidApi = useEntityStoreEuidApi();
+  const {
+    data: resolvedIndex,
+    isLoading: isIndexLoading,
+    error: indexError,
+  } = useResolvedLatestEntitiesIndexName(spaceId);
+
+  const isEnabled =
+    !skip && !isIndexLoading && Boolean(euidApi) && Boolean(resolvedIndex?.indexName);
+
+  const query = useMemo(() => {
+    if (!resolvedIndex?.indexName || !euidApi) return null;
+    return buildAlertBasedTilesQueryWithDelta(
+      euidApi.euid,
+      resolvedIndex.indexName,
+      spaceId,
+      timeRange,
+      getEntityFilterESQL(entityFilters)
+    );
+  }, [euidApi, resolvedIndex?.indexName, spaceId, timeRange, entityFilters]);
+
+  const {
+    data: queryResult,
+    isLoading,
+    isFetching,
+    error,
+  } = useQuery<AlertBasedTilesResultWithDelta, SecurityAppError>(
+    ['alertBasedTilesWithDelta', query],
+    async ({ signal }) => {
+      if (!query)
+        return {
+          alertsCount: 0,
+          alertsPrevCount: 0,
+          alertsEntityIds: [],
+          watchlistedCount: 0,
+          watchlistedPrevCount: 0,
+          watchlistedEntityIds: [],
+        };
+      const raw = await lastValueFrom(
+        data.search.search({ params: { query } }, { abortSignal: signal, strategy: 'esql_async' })
+      );
+      return parseAlertBasedTilesResponseWithDelta(raw.rawResponse as unknown as ESQLSearchResponse);
+    },
+    {
+      enabled: isEnabled && Boolean(query),
+      keepPreviousData: true,
+      staleTime: 5 * 60_000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    }
+  );
+
+  const filteredError = (error as SecurityAppError | undefined)?.message?.includes('Unknown index')
+    ? undefined
+    : (error as SecurityAppError | undefined);
+
+  useErrorToast(
+    i18n.translate('xpack.securitySolution.entityAnalytics.home.alertBasedTilesWithDelta.queryError', {
+      defaultMessage: 'There was an error loading entity alert data',
+    }),
+    filteredError ?? indexError
+  );
+
+  return {
+    alertsCount: queryResult?.alertsCount ?? 0,
+    alertsPrevCount: queryResult?.alertsPrevCount ?? 0,
+    alertsDelta: (queryResult?.alertsCount ?? 0) - (queryResult?.alertsPrevCount ?? 0),
+    alertsEntityIds: isFetching
+      ? EMPTY_ENTITY_IDS
+      : queryResult?.alertsEntityIds ?? EMPTY_ENTITY_IDS,
+    watchlistedCount: queryResult?.watchlistedCount ?? 0,
+    watchlistedPrevCount: queryResult?.watchlistedPrevCount ?? 0,
+    watchlistedDelta:
+      (queryResult?.watchlistedCount ?? 0) - (queryResult?.watchlistedPrevCount ?? 0),
     watchlistedEntityIds: isFetching
       ? EMPTY_ENTITY_IDS
       : queryResult?.watchlistedEntityIds ?? EMPTY_ENTITY_IDS,

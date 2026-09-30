@@ -66,3 +66,42 @@ export const buildAlertEuidPipeline = (euid: EntityStoreEuid): string[] => {
     '| RENAME _ea_entity_id AS `entity.id`',
   ];
 };
+
+/**
+ * Variant of buildAlertEuidPipeline that carries an `is_current` boolean column
+ * through the FORK and dedup STATS. The caller must EVAL `is_current` before
+ * invoking this pipeline. Used by buildAlertBasedTilesQueryWithDelta to split
+ * entity counts into current-period and previous-period buckets in one query.
+ */
+export const buildAlertEuidPipelineWithPeriod = (euid: EntityStoreEuid): string[] => {
+  const derivedSteps: string[] = ['WHERE `kibana.alert.entity.id` IS NULL'];
+
+  for (const entityType of ENTITY_TYPES) {
+    const fieldEvals = euid.esql.getFieldEvaluations(entityType);
+    if (fieldEvals) {
+      derivedSteps.push(`| EVAL ${fieldEvals}`);
+    }
+    derivedSteps.push(`| EVAL ${euid.esql.getEuidEvaluation(entityType, `${entityType}_euid`)}`);
+  }
+  derivedSteps.push(evalGuardedTypedEuids('_ea_entity_id'));
+  derivedSteps.push('| KEEP _ea_entity_id, is_current');
+
+  const fork = [
+    '| FORK (',
+    '    WHERE `kibana.alert.entity.id` IS NOT NULL',
+    '    | EVAL _ea_entity_id = `kibana.alert.entity.id`',
+    '    | KEEP _ea_entity_id, is_current',
+    '  )',
+    '  (',
+    indentBranch(derivedSteps.join('\n')),
+    '  )',
+  ].join('\n');
+
+  return [
+    fork,
+    '| MV_EXPAND _ea_entity_id',
+    '| WHERE _ea_entity_id IS NOT NULL',
+    '| STATS BY _ea_entity_id, is_current',
+    '| RENAME _ea_entity_id AS `entity.id`',
+  ];
+};
