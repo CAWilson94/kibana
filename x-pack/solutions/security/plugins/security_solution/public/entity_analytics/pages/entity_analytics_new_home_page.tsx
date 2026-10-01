@@ -148,6 +148,7 @@ export const EntityAnalyticsNewHomePage: React.FC = () => {
     watchlistedCount,
     watchlistedDelta,
     watchlistedEntityIds,
+    isDeltaLoading,
     isLoading: alertBasedLoading,
   } = useAlertBasedTiles({
     spaceId: resolvedSpaceId,
@@ -280,6 +281,7 @@ export const EntityAnalyticsNewHomePage: React.FC = () => {
         ),
         value: alertsCount,
         delta: alertsDelta,
+        isDeltaLoading,
         isLoading: alertBasedLoading,
         description: i18n.translate(
           'xpack.securitySolution.entityAnalytics.home.tiles.entitiesWithAlerts.description',
@@ -411,6 +413,7 @@ export const EntityAnalyticsNewHomePage: React.FC = () => {
         ),
         value: watchlistedCount,
         delta: watchlistedDelta,
+        isDeltaLoading,
         isLoading: alertBasedLoading,
         description: i18n.translate(
           'xpack.securitySolution.entityAnalytics.home.tiles.watchlisted.description',
@@ -455,6 +458,7 @@ export const EntityAnalyticsNewHomePage: React.FC = () => {
       alertsCount,
       alertsDelta,
       alertBasedLoading,
+      isDeltaLoading,
       anomaliesCount,
       anomaliesLoading,
       riskMoversCount,

@@ -192,7 +192,11 @@ const useAlertBasedTilesPrevPeriod = ({
     );
   }, [euidApi, resolvedIndex?.indexName, spaceId, timeRange, entityFilters]);
 
-  const { data: queryResult } = useQuery<AlertBasedTilesResult, SecurityAppError>(
+  const {
+    data: queryResult,
+    isLoading,
+    isFetching,
+  } = useQuery<AlertBasedTilesResult, SecurityAppError>(
     ['alertBasedTilesPrevPeriod', query],
     async ({ signal }) => {
       if (!query)
@@ -215,6 +219,9 @@ const useAlertBasedTilesPrevPeriod = ({
   return {
     alertsCount: queryResult?.alertsCount ?? 0,
     watchlistedCount: queryResult?.watchlistedCount ?? 0,
+    // True while the prev-period query hasn't resolved yet. Callers should treat
+    // the delta as unavailable and show a loading indicator rather than a stale value.
+    isLoading: isLoading || isFetching,
   };
 };
 
@@ -242,7 +249,11 @@ export const useAlertBasedTilesWithDelta = (opts: AlertTileOpts) => {
 
   return {
     ...main,
-    alertsDelta: main.alertsCount - prev.alertsCount,
-    watchlistedDelta: main.watchlistedCount - prev.watchlistedCount,
+    // When the prev-period query is still running, delta is undefined so the UI
+    // can show a loading indicator rather than a misleading value (prev defaults
+    // to 0 while loading, which would make delta appear to equal the full count).
+    alertsDelta: prev.isLoading ? undefined : main.alertsCount - prev.alertsCount,
+    watchlistedDelta: prev.isLoading ? undefined : main.watchlistedCount - prev.watchlistedCount,
+    isDeltaLoading: prev.isLoading,
   };
 };

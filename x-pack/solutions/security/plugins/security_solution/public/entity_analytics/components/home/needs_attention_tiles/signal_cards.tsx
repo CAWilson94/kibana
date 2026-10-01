@@ -80,10 +80,33 @@ const layoutCappedGridCss = ({
   `;
 };
 
-const DeltaPill: React.FC<{ delta: number }> = ({ delta }) => {
+const DeltaPill: React.FC<{ delta: number | undefined; isLoading?: boolean }> = ({
+  delta,
+  isLoading,
+}) => {
   const { euiTheme } = useEuiTheme();
 
-  if (delta === 0) return null;
+  // While loading, show "vs previous period" + spinner (Iryna's suggestion).
+  // This also avoids showing a misleading delta while prev count defaults to 0.
+  if (isLoading) {
+    return (
+      <EuiFlexGroup gutterSize="xs" alignItems="center" justifyContent="flexEnd" responsive={false}>
+        <EuiFlexItem grow={false}>
+          <EuiLoadingSpinner size="s" />
+        </EuiFlexItem>
+        <EuiFlexItem grow={false}>
+          <EuiText size="xs" color="subdued">
+            {i18n.translate(
+              'xpack.securitySolution.entityAnalytics.facelift.signalCards.vsPreviousPeriod',
+              { defaultMessage: 'vs previous period' }
+            )}
+          </EuiText>
+        </EuiFlexItem>
+      </EuiFlexGroup>
+    );
+  }
+
+  if (delta === undefined || delta === 0) return null;
 
   const isPositive = delta > 0;
   const bg = isPositive
@@ -469,13 +492,13 @@ const SignalMetricCard: React.FC<SignalMetricCardProps> = ({
                       {card.noDataMessage}
                     </EuiText>
                   )}
-                  {!isZero && card.delta !== undefined && (
+                  {!isZero && (card.isDeltaLoading || card.delta !== undefined) && (
                     <div
                       css={css`
                         margin-block-start: ${euiTheme.size.xs};
                       `}
                     >
-                      <DeltaPill delta={card.delta} />
+                      <DeltaPill delta={card.delta} isLoading={card.isDeltaLoading} />
                     </div>
                   )}
                 </>
