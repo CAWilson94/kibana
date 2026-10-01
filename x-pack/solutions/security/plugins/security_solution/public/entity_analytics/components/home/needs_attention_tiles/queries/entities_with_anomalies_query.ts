@@ -70,15 +70,14 @@ const DOUBLE_TIME_RANGE: Record<TimeRange, string> = {
 };
 
 /**
- * Delta variant of buildEntitiesWithAnomaliesCountQuery.
+ * Previous-period variant of buildEntitiesWithAnomaliesCountQuery.
  *
- * Fetches 2× the selected time range in one scan. Adds `is_current` before the
- * EUID derivation and includes it in the dedup STATS BY so the final STATS can
- * split counts into current and previous periods.
- *
- * Adds `prev_value` to the result alongside the existing `value` and `entity_ids`.
+ * Fetches only the period immediately preceding the selected time range
+ * ([2×range ago, range ago)). Same pipeline and output shape as the main
+ * query. Run as a separate, lazily-started query so the main tile count
+ * is never delayed by the delta fetch.
  */
-export const buildEntitiesWithAnomaliesCountQueryWithDelta = (
+export const buildEntitiesWithAnomaliesCountPrevPeriodQuery = (
   euid: EntityStoreEuid,
   entitiesIndexName: string,
   timeRange: TimeRange = '24h',
@@ -93,11 +92,10 @@ export const buildEntitiesWithAnomaliesCountQueryWithDelta = (
 
   const jobFilter =
     jobIds.length > 0 ? ` AND job_id IN (${jobIds.map((id) => `"${id}"`).join(', ')})` : '';
+  // Previous period only: [doubleRange ago, timeRange ago)
   parts.push(
-    `| WHERE result_type == "record" AND is_interim == false AND record_score >= 1 AND @timestamp >= NOW() - ${doubleRange}${jobFilter}`
+    `| WHERE result_type == "record" AND is_interim == false AND record_score >= 1 AND @timestamp >= NOW() - ${doubleRange} AND @timestamp < NOW() - ${timeRange}${jobFilter}`
   );
-
-  parts.push(`| EVAL is_current = @timestamp >= NOW() - ${timeRange}`);
 
   for (const entityType of ENTITY_TYPES) {
     const fieldEvals = euid.esql.getFieldEvaluations(entityType);
@@ -110,8 +108,7 @@ export const buildEntitiesWithAnomaliesCountQueryWithDelta = (
   parts.push(evalGuardedTypedEuids('derived_euids'));
   parts.push(`| MV_EXPAND derived_euids`);
   parts.push(`| WHERE derived_euids IS NOT NULL`);
-  // Include is_current in the dedup key so current/previous rows survive separately.
-  parts.push(`| STATS BY derived_euids, is_current`);
+  parts.push(`| STATS BY derived_euids`);
   parts.push(`| RENAME derived_euids AS \`entity.id\``);
   parts.push(`| LOOKUP JOIN ${entitiesIndexName} ON entity.id`);
 
@@ -121,11 +118,7 @@ export const buildEntitiesWithAnomaliesCountQueryWithDelta = (
   parts.push(
     `| EVAL effective_id = COALESCE(\`entity.relationships.resolution.resolved_to\`, entity.id)`
   );
-  parts.push(`| EVAL current_id  = CASE(is_current,      effective_id, null)`);
-  parts.push(`| EVAL previous_id = CASE(NOT is_current, effective_id, null)`);
-  parts.push(
-    `| STATS value = COUNT_DISTINCT(current_id), prev_value = COUNT_DISTINCT(previous_id), entity_ids = VALUES(current_id)`
-  );
+  parts.push(`| STATS value = COUNT_DISTINCT(effective_id), entity_ids = VALUES(entity.id)`);
 
   return parts.join('\n');
 };
