@@ -15,7 +15,10 @@ import { useKibana } from '../../../../../common/lib/kibana';
 import { useErrorToast } from '../../../../../common/hooks/use_error_toast';
 import { useResolvedLatestEntitiesIndexName } from '../../../../../common/hooks/use_resolved_latest_entities_index_name';
 import { EMPTY_ENTITY_IDS } from '../data';
-import { buildNewlyHighCriticalCountQuery } from '../queries/tile_newly_high_critical_query';
+import {
+  buildNewlyHighCriticalCountQuery,
+  buildNewlyHighCriticalCountPrevPeriodQuery,
+} from '../queries/tile_newly_high_critical_query';
 import type { TimeRange } from '../../use_time_range_param';
 import {
   getEntityFilterESQL,
@@ -23,17 +26,19 @@ import {
   type EntityFilters,
 } from '../../use_entity_filters_param';
 
+interface NewlyHCTileOpts {
+  spaceId: string;
+  skip?: boolean;
+  timeRange?: TimeRange;
+  entityFilters?: EntityFilters;
+}
+
 export const useNewlyHighCriticalCount = ({
   spaceId,
   skip,
   timeRange = '24h',
   entityFilters = EMPTY_ENTITY_FILTERS,
-}: {
-  spaceId: string;
-  skip?: boolean;
-  timeRange?: TimeRange;
-  entityFilters?: EntityFilters;
-}) => {
+}: NewlyHCTileOpts) => {
   const { data } = useKibana().services;
   const {
     data: resolvedIndex,
@@ -107,5 +112,76 @@ export const useNewlyHighCriticalCount = ({
     isLoading: isIndexLoading || isLoading || isFetching,
     isMissingIndex,
     error: filteredError ?? indexError,
+  };
+};
+
+const useNewlyHighCriticalCountPrevPeriod = ({
+  spaceId,
+  skip,
+  timeRange = '24h',
+  entityFilters = EMPTY_ENTITY_FILTERS,
+}: NewlyHCTileOpts) => {
+  const { data } = useKibana().services;
+  const { data: resolvedIndex, isLoading: isIndexLoading } =
+    useResolvedLatestEntitiesIndexName(spaceId);
+
+  const isEnabled = !skip && !isIndexLoading && Boolean(resolvedIndex?.indexName);
+
+  const query = useMemo(
+    () =>
+      resolvedIndex?.indexName
+        ? buildNewlyHighCriticalCountPrevPeriodQuery(
+            spaceId,
+            resolvedIndex.indexName,
+            timeRange,
+            getEntityFilterESQL(entityFilters)
+          )
+        : null,
+    [spaceId, resolvedIndex?.indexName, timeRange, entityFilters]
+  );
+
+  const {
+    data: queryResult,
+    isLoading,
+    isFetching,
+  } = useQuery<{ count: number }, SecurityAppError>(
+    ['newlyHighCriticalCountPrevPeriod', query],
+    async ({ signal }) => {
+      if (!query) return { count: 0 };
+      const raw = await lastValueFrom(
+        data.search.search({ params: { query } }, { abortSignal: signal, strategy: 'esql_async' })
+      );
+      const response = raw.rawResponse as unknown as ESQLSearchResponse;
+      const row = response.values?.[0];
+      const valueIndex = response.columns?.findIndex((c) => c.name === 'value') ?? 0;
+      const count = typeof row?.[valueIndex] === 'number' ? (row[valueIndex] as number) : 0;
+      return { count };
+    },
+    {
+      enabled: isEnabled && Boolean(query),
+      keepPreviousData: true,
+      staleTime: 30 * 60_000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    }
+  );
+
+  return {
+    count: queryResult?.count ?? 0,
+    isLoading: isLoading || isFetching,
+  };
+};
+
+/** Delta variant — runs a lazily-started prev-period query after the main count resolves. */
+export const useNewlyHighCriticalCountWithDelta = (opts: NewlyHCTileOpts) => {
+  const main = useNewlyHighCriticalCount(opts);
+  const prev = useNewlyHighCriticalCountPrevPeriod({
+    ...opts,
+    skip: opts.skip || main.isLoading,
+  });
+  return {
+    ...main,
+    delta: prev.isLoading ? undefined : main.count - prev.count,
+    isDeltaLoading: prev.isLoading,
   };
 };

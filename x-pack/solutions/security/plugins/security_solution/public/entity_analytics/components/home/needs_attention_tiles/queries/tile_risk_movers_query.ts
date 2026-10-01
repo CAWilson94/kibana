@@ -30,6 +30,45 @@ const TIME_RANGE_TO_ESQL: Record<TimeRange, { fetchWindow: string; period: strin
   '30d': { fetchWindow: '722h', period: '30d' }, // 30*24 + 2 = 722h
 };
 
+const PREV_TIME_RANGE_TO_ESQL: Record<
+  TimeRange,
+  { prevFetchWindow: string; prevBoundary: string; upperBound: string }
+> = {
+  '24h': { prevFetchWindow: '50h', prevBoundary: '48h', upperBound: '24h' },
+  '7d': { prevFetchWindow: '338h', prevBoundary: '336h', upperBound: '168h' },
+  '30d': { prevFetchWindow: '1442h', prevBoundary: '1440h', upperBound: '720h' },
+};
+
+export const buildRiskMoversCountPrevPeriodQuery = (
+  spaceId: string,
+  entitiesIndexName: string,
+  timeRange: TimeRange = '24h',
+  entityFilterClauses: string[] = []
+): string => {
+  const index = `risk-score.risk-score-${spaceId}`;
+  const { prevFetchWindow, prevBoundary, upperBound } = PREV_TIME_RANGE_TO_ESQL[timeRange];
+  return [
+    `SET unmapped_fields="nullify";`,
+    `FROM ${index}`,
+    `| WHERE @timestamp >= NOW() - ${prevFetchWindow} AND @timestamp < NOW() - ${upperBound}`,
+    `| EVAL entity_euid = COALESCE(host.risk.id_value, user.risk.id_value, service.risk.id_value)`,
+    `| EVAL risk_score = COALESCE(host.risk.calculated_score_norm, user.risk.calculated_score_norm, service.risk.calculated_score_norm)`,
+    `| WHERE entity_euid IS NOT NULL`,
+    `| EVAL period = CASE(@timestamp <= NOW() - ${prevBoundary}, "boundary", "current")`,
+    `| STATS score = LAST(risk_score, @timestamp) BY entity_euid, period`,
+    `| EVAL current_score  = CASE(period == "current",  score, null)`,
+    `| EVAL boundary_score = CASE(period == "boundary", score, null)`,
+    `| STATS current_score = MAX(current_score), boundary_score = MAX(boundary_score) BY entity_euid`,
+    `| WHERE current_score IS NOT NULL AND boundary_score IS NOT NULL AND current_score - boundary_score >= 10`,
+    `| RENAME entity_euid AS \`entity.id\``,
+    `| LOOKUP JOIN ${entitiesIndexName} ON entity.id`,
+    `| WHERE entity.name IS NOT NULL`,
+    ...entityFilterClauses,
+    `| EVAL effective_id = COALESCE(\`entity.relationships.resolution.resolved_to\`, entity.id)`,
+    `| STATS value = COUNT_DISTINCT(effective_id), entity_ids = VALUES(entity.id)`,
+  ].join('\n');
+};
+
 export const buildRiskMoversCountQuery = (
   spaceId: string,
   entitiesIndexName: string,

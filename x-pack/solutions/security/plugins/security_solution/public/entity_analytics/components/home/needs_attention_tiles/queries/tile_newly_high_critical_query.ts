@@ -33,6 +33,48 @@ const TIME_RANGE_TO_ESQL: Record<TimeRange, { fetchWindow: string; period: strin
   '30d': { fetchWindow: '722h', period: '30d' }, // 30*24 + 2 = 722h
 };
 
+const PREV_TIME_RANGE_TO_ESQL: Record<
+  TimeRange,
+  { prevFetchWindow: string; prevBoundary: string; upperBound: string }
+> = {
+  '24h': { prevFetchWindow: '50h', prevBoundary: '48h', upperBound: '24h' },
+  '7d': { prevFetchWindow: '338h', prevBoundary: '336h', upperBound: '168h' },
+  '30d': { prevFetchWindow: '1442h', prevBoundary: '1440h', upperBound: '720h' },
+};
+
+export const buildNewlyHighCriticalCountPrevPeriodQuery = (
+  spaceId: string,
+  entitiesIndexName: string,
+  timeRange: TimeRange = '24h',
+  entityFilterClauses: string[] = []
+): string => {
+  const index = `risk-score.risk-score-${spaceId}`;
+  const { prevFetchWindow, prevBoundary, upperBound } = PREV_TIME_RANGE_TO_ESQL[timeRange];
+  return [
+    `SET unmapped_fields="nullify";`,
+    `FROM ${index}`,
+    `| WHERE @timestamp >= NOW() - ${prevFetchWindow} AND @timestamp < NOW() - ${upperBound}`,
+    `| EVAL entity_euid = COALESCE(host.risk.id_value, user.risk.id_value, service.risk.id_value)`,
+    `| EVAL risk_level = COALESCE(host.risk.calculated_level, user.risk.calculated_level, service.risk.calculated_level)`,
+    `| WHERE entity_euid IS NOT NULL`,
+    `| EVAL level_num = CASE(risk_level == "Critical", 4, risk_level == "High", 3, risk_level == "Moderate", 2, risk_level == "Low", 1, 0)`,
+    `| EVAL period = CASE(@timestamp <= NOW() - ${prevBoundary}, "boundary", "current")`,
+    `| STATS level_num = LAST(level_num, @timestamp) BY entity_euid, period`,
+    `| EVAL current_level_num  = CASE(period == "current",  level_num, null)`,
+    `| EVAL boundary_level_num = CASE(period == "boundary", level_num, null)`,
+    `| STATS current_level_num  = MAX(current_level_num),`,
+    `        boundary_level_num = MAX(boundary_level_num)`,
+    `        BY entity_euid`,
+    `| WHERE current_level_num >= 3 AND (boundary_level_num IS NULL OR boundary_level_num < 3)`,
+    `| RENAME entity_euid AS \`entity.id\``,
+    `| LOOKUP JOIN ${entitiesIndexName} ON entity.id`,
+    `| WHERE entity.name IS NOT NULL`,
+    ...entityFilterClauses,
+    `| EVAL effective_id = COALESCE(\`entity.relationships.resolution.resolved_to\`, entity.id)`,
+    `| STATS value = COUNT_DISTINCT(effective_id), entity_ids = VALUES(entity.id)`,
+  ].join('\n');
+};
+
 export const buildNewlyHighCriticalCountQuery = (
   spaceId: string,
   entitiesIndexName: string,

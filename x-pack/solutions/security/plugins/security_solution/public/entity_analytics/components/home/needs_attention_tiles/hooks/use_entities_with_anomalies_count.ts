@@ -17,7 +17,10 @@ import { useKibana } from '../../../../../common/lib/kibana';
 import { useInstalledSecurityJobsIds } from '../../../../../common/components/ml/hooks/use_installed_security_jobs';
 import { useResolvedLatestEntitiesIndexName } from '../../../../../common/hooks/use_resolved_latest_entities_index_name';
 import { EMPTY_ENTITY_IDS } from '../data';
-import { buildEntitiesWithAnomaliesCountQuery } from '../queries/entities_with_anomalies_query';
+import {
+  buildEntitiesWithAnomaliesCountQuery,
+  buildEntitiesWithAnomaliesCountPrevPeriodQuery,
+} from '../queries/entities_with_anomalies_query';
 import type { TimeRange } from '../../use_time_range_param';
 import {
   getEntityFilterESQL,
@@ -36,17 +39,19 @@ const esqlSearch = async (
   return result.rawResponse as unknown as ESQLSearchResponse;
 };
 
+interface AnomaliesTileOpts {
+  spaceId: string;
+  skip?: boolean;
+  timeRange?: TimeRange;
+  entityFilters?: EntityFilters;
+}
+
 export const useEntitiesWithAnomaliesCount = ({
   spaceId,
   skip,
   timeRange = '24h',
   entityFilters = EMPTY_ENTITY_FILTERS,
-}: {
-  spaceId: string;
-  skip?: boolean;
-  timeRange?: TimeRange;
-  entityFilters?: EntityFilters;
-}) => {
+}: AnomaliesTileOpts) => {
   const { data } = useKibana().services;
   const euidApi = useEntityStoreEuidApi();
   const {
@@ -122,5 +127,79 @@ export const useEntitiesWithAnomaliesCount = ({
     entityIds: isFetching ? EMPTY_ENTITY_IDS : queryResult?.entityIds ?? EMPTY_ENTITY_IDS,
     isLoading: isJobsLoading || isIndexLoading || isLoading || isFetching,
     error: filteredError ?? indexError,
+  };
+};
+
+const useEntitiesWithAnomaliesCountPrevPeriod = ({
+  spaceId,
+  skip,
+  timeRange = '24h',
+  entityFilters = EMPTY_ENTITY_FILTERS,
+}: AnomaliesTileOpts) => {
+  const { data } = useKibana().services;
+  const euidApi = useEntityStoreEuidApi();
+  const { data: resolvedIndex, isLoading: isIndexLoading } =
+    useResolvedLatestEntitiesIndexName(spaceId);
+  const { jobIds, loading: isJobsLoading } = useInstalledSecurityJobsIds();
+
+  const isEnabled =
+    !skip &&
+    !isIndexLoading &&
+    !isJobsLoading &&
+    jobIds.length > 0 &&
+    Boolean(euidApi) &&
+    Boolean(resolvedIndex?.indexName);
+
+  const query = useMemo(() => {
+    if (!euidApi || !resolvedIndex?.indexName) return null;
+    return buildEntitiesWithAnomaliesCountPrevPeriodQuery(
+      euidApi.euid,
+      resolvedIndex.indexName,
+      timeRange,
+      getEntityFilterESQL(entityFilters),
+      jobIds
+    );
+  }, [euidApi, resolvedIndex?.indexName, timeRange, entityFilters, jobIds]);
+
+  const {
+    data: queryResult,
+    isLoading,
+    isFetching,
+  } = useQuery<{ count: number }, SecurityAppError>(
+    ['entitiesWithAnomaliesCountPrevPeriod', query],
+    async ({ signal }) => {
+      if (!query) return { count: 0 };
+      const raw = await esqlSearch(data.search, query, signal);
+      const row = raw.values?.[0];
+      const valueIndex = raw.columns?.findIndex((c) => c.name === 'value') ?? 0;
+      const count = typeof row?.[valueIndex] === 'number' ? (row[valueIndex] as number) : 0;
+      return { count };
+    },
+    {
+      enabled: isEnabled && Boolean(query),
+      keepPreviousData: true,
+      staleTime: 30 * 60_000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    }
+  );
+
+  return {
+    count: queryResult?.count ?? 0,
+    isLoading: isLoading || isFetching,
+  };
+};
+
+/** Delta variant — runs a lazily-started prev-period query after the main count resolves. */
+export const useEntitiesWithAnomaliesCountWithDelta = (opts: AnomaliesTileOpts) => {
+  const main = useEntitiesWithAnomaliesCount(opts);
+  const prev = useEntitiesWithAnomaliesCountPrevPeriod({
+    ...opts,
+    skip: opts.skip || main.isLoading,
+  });
+  return {
+    ...main,
+    delta: prev.isLoading ? undefined : main.count - prev.count,
+    isDeltaLoading: prev.isLoading,
   };
 };
