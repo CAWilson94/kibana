@@ -17,7 +17,8 @@ import { useResolvedLatestEntitiesIndexName } from '../../../../../common/hooks/
 import { EMPTY_ENTITY_IDS } from '../data';
 import {
   buildNewlyHighCriticalCountQuery,
-  buildNewlyHighCriticalCountPrevPeriodQuery,
+  newlyHighCriticalWindow,
+  newlyHighCriticalPrevWindow,
 } from '../queries/tile_newly_high_critical_query';
 import type { TimeRange } from '../../use_time_range_param';
 import {
@@ -54,7 +55,7 @@ export const useNewlyHighCriticalCount = ({
         ? buildNewlyHighCriticalCountQuery(
             spaceId,
             resolvedIndex.indexName,
-            timeRange,
+            newlyHighCriticalWindow(timeRange),
             getEntityFilterESQL(entityFilters)
           )
         : null,
@@ -130,10 +131,10 @@ const useNewlyHighCriticalCountPrevPeriod = ({
   const query = useMemo(
     () =>
       resolvedIndex?.indexName
-        ? buildNewlyHighCriticalCountPrevPeriodQuery(
+        ? buildNewlyHighCriticalCountQuery(
             spaceId,
             resolvedIndex.indexName,
-            timeRange,
+            newlyHighCriticalPrevWindow(timeRange),
             getEntityFilterESQL(entityFilters)
           )
         : null,

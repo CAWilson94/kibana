@@ -17,7 +17,8 @@ import { useResolvedLatestEntitiesIndexName } from '../../../../../common/hooks/
 import { EMPTY_ENTITY_IDS } from '../data';
 import {
   buildRiskMoversCountQuery,
-  buildRiskMoversCountPrevPeriodQuery,
+  riskMoversWindow,
+  riskMoversPrevWindow,
 } from '../queries/tile_risk_movers_query';
 import type { TimeRange } from '../../use_time_range_param';
 import {
@@ -54,7 +55,7 @@ export const useRiskMoversCount = ({
         ? buildRiskMoversCountQuery(
             spaceId,
             resolvedIndex.indexName,
-            timeRange,
+            riskMoversWindow(timeRange),
             getEntityFilterESQL(entityFilters)
           )
         : null,
@@ -130,10 +131,10 @@ const useRiskMoversCountPrevPeriod = ({
   const query = useMemo(
     () =>
       resolvedIndex?.indexName
-        ? buildRiskMoversCountPrevPeriodQuery(
+        ? buildRiskMoversCountQuery(
             spaceId,
             resolvedIndex.indexName,
-            timeRange,
+            riskMoversPrevWindow(timeRange),
             getEntityFilterESQL(entityFilters)
           )
         : null,

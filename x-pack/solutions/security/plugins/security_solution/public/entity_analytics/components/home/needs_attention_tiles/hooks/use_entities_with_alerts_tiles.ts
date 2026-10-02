@@ -17,7 +17,8 @@ import { useKibana } from '../../../../../common/lib/kibana';
 import { useResolvedLatestEntitiesIndexName } from '../../../../../common/hooks/use_resolved_latest_entities_index_name';
 import {
   buildAlertBasedTilesQuery,
-  buildAlertBasedTilesPrevPeriodQuery,
+  alertsWindow,
+  alertsPrevWindow,
 } from '../queries/entities_with_alerts_query';
 import type { TimeRange } from '../../use_time_range_param';
 import { EMPTY_ENTITY_IDS } from '../data';
@@ -95,7 +96,7 @@ export const useAlertBasedTiles = ({
       euidApi.euid,
       resolvedIndex.indexName,
       spaceId,
-      timeRange,
+      alertsWindow(timeRange),
       getEntityFilterESQL(entityFilters)
     );
   }, [euidApi, resolvedIndex?.indexName, spaceId, timeRange, entityFilters]);
@@ -183,11 +184,11 @@ const useAlertBasedTilesPrevPeriod = ({
 
   const query = useMemo(() => {
     if (!resolvedIndex?.indexName || !euidApi) return null;
-    return buildAlertBasedTilesPrevPeriodQuery(
+    return buildAlertBasedTilesQuery(
       euidApi.euid,
       resolvedIndex.indexName,
       spaceId,
-      timeRange,
+      alertsPrevWindow(timeRange),
       getEntityFilterESQL(entityFilters)
     );
   }, [euidApi, resolvedIndex?.indexName, spaceId, timeRange, entityFilters]);
@@ -200,7 +201,12 @@ const useAlertBasedTilesPrevPeriod = ({
     ['alertBasedTilesPrevPeriod', query],
     async ({ signal }) => {
       if (!query)
-        return { alertsCount: 0, alertsEntityIds: [], watchlistedCount: 0, watchlistedEntityIds: [] };
+        return {
+          alertsCount: 0,
+          alertsEntityIds: [],
+          watchlistedCount: 0,
+          watchlistedEntityIds: [],
+        };
       const raw = await lastValueFrom(
         data.search.search({ params: { query } }, { abortSignal: signal, strategy: 'esql_async' })
       );

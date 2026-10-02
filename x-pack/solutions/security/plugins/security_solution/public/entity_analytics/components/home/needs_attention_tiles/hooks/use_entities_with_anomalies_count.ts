@@ -19,7 +19,8 @@ import { useResolvedLatestEntitiesIndexName } from '../../../../../common/hooks/
 import { EMPTY_ENTITY_IDS } from '../data';
 import {
   buildEntitiesWithAnomaliesCountQuery,
-  buildEntitiesWithAnomaliesCountPrevPeriodQuery,
+  anomaliesWindow,
+  anomaliesPrevWindow,
 } from '../queries/entities_with_anomalies_query';
 import type { TimeRange } from '../../use_time_range_param';
 import {
@@ -74,7 +75,7 @@ export const useEntitiesWithAnomaliesCount = ({
     return buildEntitiesWithAnomaliesCountQuery(
       euidApi.euid,
       resolvedIndex.indexName,
-      timeRange,
+      anomaliesWindow(timeRange),
       getEntityFilterESQL(entityFilters),
       jobIds
     );
@@ -152,10 +153,10 @@ const useEntitiesWithAnomaliesCountPrevPeriod = ({
 
   const query = useMemo(() => {
     if (!euidApi || !resolvedIndex?.indexName) return null;
-    return buildEntitiesWithAnomaliesCountPrevPeriodQuery(
+    return buildEntitiesWithAnomaliesCountQuery(
       euidApi.euid,
       resolvedIndex.indexName,
-      timeRange,
+      anomaliesPrevWindow(timeRange),
       getEntityFilterESQL(entityFilters),
       jobIds
     );

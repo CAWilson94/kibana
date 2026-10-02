@@ -7,9 +7,27 @@
 
 import type { EntityStoreEuid } from '@kbn/entity-store/public';
 import type { TimeRange } from '../../use_time_range_param';
+import type { SimpleTimeWindow } from './tile_time_window';
 import { buildAlertEuidPipeline } from './alert_euid_pipeline';
 
 const alertsIndex = (spaceId: string) => `.alerts-security.alerts-${spaceId}`;
+
+const DOUBLE_TIME_RANGE: Record<TimeRange, string> = {
+  '24h': '48h',
+  '7d': '14d',
+  '30d': '60d',
+};
+
+/** Returns the time window for the current period of the alert-based tiles query. */
+export const alertsWindow = (timeRange: TimeRange = '24h'): SimpleTimeWindow => ({
+  from: timeRange,
+});
+
+/** Returns the time window for the previous period of the alert-based tiles query. */
+export const alertsPrevWindow = (timeRange: TimeRange = '24h'): SimpleTimeWindow => ({
+  from: DOUBLE_TIME_RANGE[timeRange],
+  to: timeRange,
+});
 
 /**
  * Builds a single ES|QL query that computes both the entities-with-alerts count
@@ -29,19 +47,24 @@ const alertsIndex = (spaceId: string) => `.alerts-security.alerts-${spaceId}`;
  *
  * COUNT_DISTINCT and VALUES ignore null values, so nulling out non-watchlisted rows
  * is all that is needed to produce the watchlist-only aggregation.
+ *
+ * Use `alertsWindow(timeRange)` for the current period and
+ * `alertsPrevWindow(timeRange)` for the previous period, then pass the result
+ * to this function.
  */
 export const buildAlertBasedTilesQuery = (
   euid: EntityStoreEuid,
   entitiesIndexName: string,
   spaceId: string,
-  timeRange: TimeRange = '24h',
+  window: SimpleTimeWindow = alertsWindow(),
   entityFilterClauses: string[] = []
 ): string => {
   const parts: string[] = [];
+  const upperBoundClause = window.to ? ` AND @timestamp < NOW() - ${window.to}` : '';
 
   parts.push(`SET unmapped_fields="nullify";`);
   parts.push(`FROM ${alertsIndex(spaceId)}`);
-  parts.push(`| WHERE @timestamp >= NOW() - ${timeRange}`);
+  parts.push(`| WHERE @timestamp >= NOW() - ${window.from}${upperBoundClause}`);
   parts.push(...buildAlertEuidPipeline(euid));
 
   parts.push(`| LOOKUP JOIN ${entitiesIndexName} ON entity.id`);
@@ -54,60 +77,6 @@ export const buildAlertBasedTilesQuery = (
   );
 
   // Compute watchlist columns — null for non-watchlisted rows so COUNT_DISTINCT/VALUES ignore them.
-  parts.push(`| EVAL is_watchlisted = entity.attributes.watchlists IS NOT NULL`);
-  parts.push(`| EVAL watchlisted_effective_id = CASE(is_watchlisted, effective_id, null)`);
-  parts.push(`| EVAL watchlisted_entity_id    = CASE(is_watchlisted, entity.id, null)`);
-
-  parts.push(`| STATS`);
-  parts.push(`    alerts_count           = COUNT_DISTINCT(effective_id),`);
-  parts.push(`    alerts_entity_ids      = VALUES(effective_id),`);
-  parts.push(`    watchlisted_count      = COUNT_DISTINCT(watchlisted_effective_id),`);
-  parts.push(`    watchlisted_entity_ids = VALUES(watchlisted_entity_id)`);
-
-  return parts.join('\n');
-};
-
-// Maps each time range to a 2x fetch window for the previous-period delta query.
-const DOUBLE_TIME_RANGE: Record<TimeRange, string> = {
-  '24h': '48h',
-  '7d': '14d',
-  '30d': '60d',
-};
-
-/**
- * Previous-period variant of buildAlertBasedTilesQuery.
- *
- * Fetches only the period immediately preceding the selected time range
- * (i.e. [2×range ago, range ago)) using the same pipeline and output shape
- * as the main query. Run this as a separate, lazily-started query so the
- * main tile count is never delayed by the delta fetch.
- *
- * The previous window barely changes between renders, so the caller should
- * use a much longer staleTime (e.g. 30 min) than the main query.
- */
-export const buildAlertBasedTilesPrevPeriodQuery = (
-  euid: EntityStoreEuid,
-  entitiesIndexName: string,
-  spaceId: string,
-  timeRange: TimeRange = '24h',
-  entityFilterClauses: string[] = []
-): string => {
-  const parts: string[] = [];
-  const doubleRange = DOUBLE_TIME_RANGE[timeRange];
-
-  parts.push(`SET unmapped_fields="nullify";`);
-  parts.push(`FROM ${alertsIndex(spaceId)}`);
-  // Previous period only: [doubleRange ago, timeRange ago)
-  parts.push(`| WHERE @timestamp >= NOW() - ${doubleRange} AND @timestamp < NOW() - ${timeRange}`);
-  parts.push(...buildAlertEuidPipeline(euid));
-
-  parts.push(`| LOOKUP JOIN ${entitiesIndexName} ON entity.id`);
-  parts.push(`| WHERE entity.name IS NOT NULL`);
-  parts.push(...entityFilterClauses);
-
-  parts.push(
-    `| EVAL effective_id = COALESCE(\`entity.relationships.resolution.resolved_to\`, entity.id)`
-  );
   parts.push(`| EVAL is_watchlisted = entity.attributes.watchlists IS NOT NULL`);
   parts.push(`| EVAL watchlisted_effective_id = CASE(is_watchlisted, effective_id, null)`);
   parts.push(`| EVAL watchlisted_entity_id    = CASE(is_watchlisted, entity.id, null)`);

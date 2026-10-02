@@ -6,6 +6,7 @@
  */
 
 import type { TimeRange } from '../../use_time_range_param';
+import type { ComparisonWindow } from './tile_time_window';
 
 /**
  * Builds an ES|QL query that counts entities whose risk score rose by ≥10 points
@@ -22,6 +23,10 @@ import type { TimeRange } from '../../use_time_range_param';
  *
  * SET unmapped_fields="nullify" prevents errors when only some entity types are
  * present in the index (e.g. only host docs → user.name is not in the mapping).
+ *
+ * Use `riskMoversWindow(timeRange)` for the current period and
+ * `riskMoversPrevWindow(timeRange)` for the previous period, then pass the result
+ * to `buildRiskMoversCountQuery`.
  */
 
 const TIME_RANGE_TO_ESQL: Record<TimeRange, { fetchWindow: string; period: string }> = {
@@ -39,52 +44,36 @@ const PREV_TIME_RANGE_TO_ESQL: Record<
   '30d': { prevFetchWindow: '1442h', prevBoundary: '1440h', upperBound: '720h' },
 };
 
-export const buildRiskMoversCountPrevPeriodQuery = (
-  spaceId: string,
-  entitiesIndexName: string,
-  timeRange: TimeRange = '24h',
-  entityFilterClauses: string[] = []
-): string => {
-  const index = `risk-score.risk-score-${spaceId}`;
+/** Returns the time window for the current period of the risk movers query. */
+export const riskMoversWindow = (timeRange: TimeRange = '24h'): ComparisonWindow => {
+  const { fetchWindow, period } = TIME_RANGE_TO_ESQL[timeRange];
+  return { fetchWindow, boundary: period };
+};
+
+/** Returns the time window for the previous period of the risk movers query. */
+export const riskMoversPrevWindow = (timeRange: TimeRange = '24h'): ComparisonWindow => {
   const { prevFetchWindow, prevBoundary, upperBound } = PREV_TIME_RANGE_TO_ESQL[timeRange];
-  return [
-    `SET unmapped_fields="nullify";`,
-    `FROM ${index}`,
-    `| WHERE @timestamp >= NOW() - ${prevFetchWindow} AND @timestamp < NOW() - ${upperBound}`,
-    `| EVAL entity_euid = COALESCE(host.risk.id_value, user.risk.id_value, service.risk.id_value)`,
-    `| EVAL risk_score = COALESCE(host.risk.calculated_score_norm, user.risk.calculated_score_norm, service.risk.calculated_score_norm)`,
-    `| WHERE entity_euid IS NOT NULL`,
-    `| EVAL period = CASE(@timestamp <= NOW() - ${prevBoundary}, "boundary", "current")`,
-    `| STATS score = LAST(risk_score, @timestamp) BY entity_euid, period`,
-    `| EVAL current_score  = CASE(period == "current",  score, null)`,
-    `| EVAL boundary_score = CASE(period == "boundary", score, null)`,
-    `| STATS current_score = MAX(current_score), boundary_score = MAX(boundary_score) BY entity_euid`,
-    `| WHERE current_score IS NOT NULL AND boundary_score IS NOT NULL AND current_score - boundary_score >= 10`,
-    `| RENAME entity_euid AS \`entity.id\``,
-    `| LOOKUP JOIN ${entitiesIndexName} ON entity.id`,
-    `| WHERE entity.name IS NOT NULL`,
-    ...entityFilterClauses,
-    `| EVAL effective_id = COALESCE(\`entity.relationships.resolution.resolved_to\`, entity.id)`,
-    `| STATS value = COUNT_DISTINCT(effective_id), entity_ids = VALUES(entity.id)`,
-  ].join('\n');
+  return { fetchWindow: prevFetchWindow, boundary: prevBoundary, upperBound };
 };
 
 export const buildRiskMoversCountQuery = (
   spaceId: string,
   entitiesIndexName: string,
-  timeRange: TimeRange = '24h',
+  window: ComparisonWindow = riskMoversWindow(),
   entityFilterClauses: string[] = []
 ): string => {
   const index = `risk-score.risk-score-${spaceId}`;
-  const { fetchWindow, period } = TIME_RANGE_TO_ESQL[timeRange];
+  const upperBoundClause = window.upperBound
+    ? ` AND @timestamp < NOW() - ${window.upperBound}`
+    : '';
   return [
     `SET unmapped_fields="nullify";`,
     `FROM ${index}`,
-    `| WHERE @timestamp >= NOW() - ${fetchWindow}`,
+    `| WHERE @timestamp >= NOW() - ${window.fetchWindow}${upperBoundClause}`,
     `| EVAL entity_euid = COALESCE(host.risk.id_value, user.risk.id_value, service.risk.id_value)`,
     `| EVAL risk_score = COALESCE(host.risk.calculated_score_norm, user.risk.calculated_score_norm, service.risk.calculated_score_norm)`,
     `| WHERE entity_euid IS NOT NULL`,
-    `| EVAL period = CASE(@timestamp <= NOW() - ${period}, "boundary", "current")`,
+    `| EVAL period = CASE(@timestamp <= NOW() - ${window.boundary}, "boundary", "current")`,
     `| STATS score = LAST(risk_score, @timestamp) BY entity_euid, period`,
     `| EVAL current_score  = CASE(period == "current",  score, null)`,
     `| EVAL boundary_score = CASE(period == "boundary", score, null)`,
