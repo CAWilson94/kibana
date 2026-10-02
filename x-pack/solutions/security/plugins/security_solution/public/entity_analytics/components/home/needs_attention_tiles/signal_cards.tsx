@@ -21,6 +21,7 @@ import {
 import { css } from '@emotion/react';
 import { i18n } from '@kbn/i18n';
 
+import { getDeltaPercentage } from './delta_percentage';
 import type { ActiveFilter, SignalCardData, SignalCardId } from './data';
 
 export interface SignalCardsProps {
@@ -80,10 +81,12 @@ const layoutCappedGridCss = ({
   `;
 };
 
-const DeltaPill: React.FC<{ delta: number | undefined; isLoading?: boolean }> = ({
-  delta,
-  isLoading,
-}) => {
+const DeltaPill: React.FC<{
+  delta: number | undefined;
+  /** Current tile count, used to derive the previous count and the percentage change. */
+  value: number;
+  isLoading?: boolean;
+}> = ({ delta, value, isLoading }) => {
   const { euiTheme } = useEuiTheme();
 
   // While loading, show "vs previous period" + spinner (Iryna's suggestion).
@@ -115,6 +118,7 @@ const DeltaPill: React.FC<{ delta: number | undefined; isLoading?: boolean }> = 
   const color = isPositive ? euiTheme.colors.danger : euiTheme.colors.textSuccess;
   const arrow = isPositive ? '↑' : '↓';
   const sign = isPositive ? '+' : '';
+  const percentage = getDeltaPercentage(delta, value);
 
   return (
     <EuiFlexGroup gutterSize="xs" alignItems="center" justifyContent="flexEnd" responsive={false}>
@@ -134,7 +138,8 @@ const DeltaPill: React.FC<{ delta: number | undefined; isLoading?: boolean }> = 
           `}
         >
           {sign}
-          {delta} {arrow}
+          {delta}
+          {percentage !== undefined && ` (${sign}${percentage}%)`} {arrow}
         </span>
       </EuiFlexItem>
       <EuiFlexItem grow={false}>
@@ -498,7 +503,11 @@ const SignalMetricCard: React.FC<SignalMetricCardProps> = ({
                         margin-block-start: ${euiTheme.size.xs};
                       `}
                     >
-                      <DeltaPill delta={card.delta} isLoading={card.isDeltaLoading} />
+                      <DeltaPill
+                        delta={card.delta}
+                        value={card.value}
+                        isLoading={card.isDeltaLoading}
+                      />
                     </div>
                   )}
                 </>
