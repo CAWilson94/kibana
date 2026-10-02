@@ -66,3 +66,4 @@ export const buildAlertEuidPipeline = (euid: EntityStoreEuid): string[] => {
     '| RENAME _ea_entity_id AS `entity.id`',
   ];
 };
+

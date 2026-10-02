@@ -7,20 +7,42 @@
 
 import type { EntityStoreEuid } from '@kbn/entity-store/public';
 import type { TimeRange } from '../../use_time_range_param';
+import type { SimpleTimeWindow } from './tile_time_window';
 import { evalGuardedTypedEuids } from './guarded_typed_euid_eval';
 
 const ML_ANOMALIES_INDEX = '.ml-anomalies-shared*';
 const ENTITY_TYPES = ['user', 'host', 'service'] as const;
 
+const DOUBLE_TIME_RANGE: Record<TimeRange, string> = {
+  '24h': '48h',
+  '7d': '14d',
+  '30d': '60d',
+};
+
+/** Returns the time window for the current period of the anomalies query. */
+export const anomaliesWindow = (timeRange: TimeRange = '24h'): SimpleTimeWindow => ({
+  from: timeRange,
+});
+
+/** Returns the time window for the previous period of the anomalies query. */
+export const anomaliesPrevWindow = (timeRange: TimeRange = '24h'): SimpleTimeWindow => ({
+  from: DOUBLE_TIME_RANGE[timeRange],
+  to: timeRange,
+});
+
 /**
  * Builds a single ES|QL query that counts distinct entities with at least one
  * ML anomaly record within the selected time window, using a LOOKUP JOIN from
  * anomalies → entity-latest on the typed EUID (entity.id).
+ *
+ * Use `anomaliesWindow(timeRange)` for the current period and
+ * `anomaliesPrevWindow(timeRange)` for the previous period, then pass the result
+ * to this function.
  */
 export const buildEntitiesWithAnomaliesCountQuery = (
   euid: EntityStoreEuid,
   entitiesIndexName: string,
-  timeRange: TimeRange = '24h',
+  window: SimpleTimeWindow = anomaliesWindow(),
   entityFilterClauses: string[] = [],
   jobIds: string[] = []
 ): string => {
@@ -31,8 +53,9 @@ export const buildEntitiesWithAnomaliesCountQuery = (
 
   const jobFilter =
     jobIds.length > 0 ? ` AND job_id IN (${jobIds.map((id) => `"${id}"`).join(', ')})` : '';
+  const upperBoundClause = window.to ? ` AND @timestamp < NOW() - ${window.to}` : '';
   parts.push(
-    `| WHERE result_type == "record" AND is_interim == false AND record_score >= 1 AND @timestamp >= NOW() - ${timeRange}${jobFilter}`
+    `| WHERE result_type == "record" AND is_interim == false AND record_score >= 1 AND @timestamp >= NOW() - ${window.from}${upperBoundClause}${jobFilter}`
   );
 
   for (const entityType of ENTITY_TYPES) {

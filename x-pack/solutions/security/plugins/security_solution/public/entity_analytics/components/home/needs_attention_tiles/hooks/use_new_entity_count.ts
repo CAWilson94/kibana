@@ -28,17 +28,25 @@ const TIME_RANGE_TO_ESQL: Record<TimeRange, string> = {
   '30d': '30 days',
 };
 
+const DOUBLE_TIME_RANGE: Record<TimeRange, string> = {
+  '24h': '48 hours',
+  '7d': '14 days',
+  '30d': '60 days',
+};
+
+interface NewEntityTileOpts {
+  spaceId: string;
+  skip?: boolean;
+  timeRange?: TimeRange;
+  entityFilters?: EntityFilters;
+}
+
 export const useNewEntityCount = ({
   spaceId,
   skip,
   timeRange = '7d',
   entityFilters = EMPTY_ENTITY_FILTERS,
-}: {
-  spaceId: string;
-  skip?: boolean;
-  timeRange?: TimeRange;
-  entityFilters?: EntityFilters;
-}) => {
+}: NewEntityTileOpts) => {
   const { data } = useKibana().services;
   const {
     data: resolvedIndex,
@@ -121,5 +129,83 @@ export const useNewEntityCount = ({
     entityIds: isFetching ? EMPTY_ENTITY_IDS : result?.entityIds ?? EMPTY_ENTITY_IDS,
     isLoading: isIndexLoading || isLoading || isFetching,
     error: (error as SecurityAppError | undefined) ?? indexError,
+  };
+};
+
+const useNewEntityCountPrevPeriod = ({
+  spaceId,
+  skip,
+  timeRange = '7d',
+  entityFilters = EMPTY_ENTITY_FILTERS,
+}: NewEntityTileOpts) => {
+  const { data } = useKibana().services;
+  const { data: resolvedIndex, isLoading: isIndexLoading } =
+    useResolvedLatestEntitiesIndexName(spaceId);
+
+  const index = resolvedIndex?.indexName;
+
+  const query = useMemo(
+    () =>
+      index
+        ? [
+            `FROM ${index}`,
+            `| WHERE entity.lifecycle.first_seen >= NOW() - ${DOUBLE_TIME_RANGE[timeRange]} AND entity.lifecycle.first_seen < NOW() - ${TIME_RANGE_TO_ESQL[timeRange]} AND entity.risk.calculated_score > 0`,
+            ...getEntityFilterESQL(entityFilters),
+            `| EVAL effective_id = COALESCE(\`entity.relationships.resolution.resolved_to\`, entity.id)`,
+            `| STATS value = COUNT_DISTINCT(effective_id), entity_ids = VALUES(entity.id)`,
+          ].join('\n')
+        : null,
+    [index, timeRange, entityFilters]
+  );
+
+  const isEnabled = !skip && !isIndexLoading && Boolean(index);
+
+  const {
+    data: result,
+    isLoading,
+    isFetching,
+  } = useQuery(
+    ['newEntityCountPrevPeriod', query],
+    async ({ signal }) => {
+      if (!query) return { count: 0 };
+      const searchResult = await lastValueFrom(
+        data.search.search(
+          { params: { query } },
+          { abortSignal: signal, strategy: 'esql_async', projectRouting: '_alias:_origin' }
+        )
+      );
+      const rawResponse = searchResult.rawResponse as unknown as ESQLSearchResponse;
+      const row = rawResponse.values?.[0];
+      const valueIndex = rawResponse.columns?.findIndex((c) => c.name === 'value') ?? 0;
+      return {
+        count: typeof row?.[valueIndex] === 'number' ? (row[valueIndex] as number) : 0,
+      };
+    },
+    {
+      keepPreviousData: true,
+      staleTime: 30 * 60_000,
+      refetchOnWindowFocus: false,
+      enabled: isEnabled,
+      retry: 1,
+    }
+  );
+
+  return {
+    count: result?.count ?? 0,
+    isLoading: isLoading || isFetching,
+  };
+};
+
+/** Delta variant — runs a lazily-started prev-period query after the main count resolves. */
+export const useNewEntityCountWithDelta = (opts: NewEntityTileOpts) => {
+  const main = useNewEntityCount(opts);
+  const prev = useNewEntityCountPrevPeriod({
+    ...opts,
+    skip: opts.skip || main.isLoading,
+  });
+  return {
+    ...main,
+    delta: prev.isLoading ? undefined : main.count - prev.count,
+    isDeltaLoading: prev.isLoading,
   };
 };
