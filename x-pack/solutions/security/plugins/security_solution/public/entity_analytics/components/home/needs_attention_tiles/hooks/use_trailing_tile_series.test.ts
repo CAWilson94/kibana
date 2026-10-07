@@ -90,6 +90,13 @@ describe('useTrailingTileSeries', () => {
     expect(dots.slice(-2)).toEqual([3, 5]);
   });
 
+  it('reads the response with the parser the tile supplies', async () => {
+    const parse = jest.fn().mockReturnValue([9, 8]);
+    renderHook(() => useTrailingTileSeries({ ...baseOpts, parse }));
+    expect(await runQueryFn()).toEqual([9, 8]);
+    expect(parse).toHaveBeenCalledWith(expect.objectContaining({ values: [[5, 3]] }), '24h');
+  });
+
   it('routes the query to the local cluster only when asked to', async () => {
     renderHook(() => useTrailingTileSeries(baseOpts));
     await runQueryFn();

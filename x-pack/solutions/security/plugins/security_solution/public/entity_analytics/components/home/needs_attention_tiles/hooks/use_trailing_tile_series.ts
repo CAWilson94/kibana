@@ -22,6 +22,8 @@ interface UseTrailingTileSeriesOpts {
   timeRange: TimeRange;
   /** Returns the result column of dot `k` (0 = newest). */
   columnOf: (k: number) => string;
+  /** Reads the response into oldest-first dots; by default one value per dot from `columnOf`. */
+  parse?: (raw: ESQLSearchResponse, timeRange: TimeRange) => number[];
   /** Hold the query until the headline count and delta have loaded. */
   enabled: boolean;
   /** Message of the error toast shown when the query fails. */
@@ -40,6 +42,7 @@ export const useTrailingTileSeries = ({
   query,
   timeRange,
   columnOf,
+  parse = (raw, range) => parseTrailingDots(raw, range, columnOf),
   enabled,
   errorMessage,
   localOnly = false,
@@ -55,7 +58,7 @@ export const useTrailingTileSeries = ({
   } = useQuery<number[], SecurityAppError>(
     ['trailingTileSeries', tileKey, query, timeRange],
     async ({ signal }) => {
-      if (!query) return parseTrailingDots({ columns: [], values: [] }, timeRange, columnOf);
+      if (!query) return parse({ columns: [], values: [] }, timeRange);
       const raw = await lastValueFrom(
         data.search.search(
           { params: { query } },
@@ -66,11 +69,7 @@ export const useTrailingTileSeries = ({
           }
         )
       );
-      return parseTrailingDots(
-        raw.rawResponse as unknown as ESQLSearchResponse,
-        timeRange,
-        columnOf
-      );
+      return parse(raw.rawResponse as unknown as ESQLSearchResponse, timeRange);
     },
     {
       enabled: isEnabled,

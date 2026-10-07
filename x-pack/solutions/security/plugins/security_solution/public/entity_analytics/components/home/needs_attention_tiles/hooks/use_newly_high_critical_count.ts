@@ -20,6 +20,12 @@ import {
   newlyHighCriticalWindow,
   newlyHighCriticalPrevWindow,
 } from '../queries/tile_newly_high_critical_query';
+import {
+  buildNewlyHighCriticalTrailingSeriesQuery,
+  parseNewlyHighCriticalDots,
+  trailingNewlyHighCriticalColumn,
+} from '../queries/tile_newly_high_critical_trailing_series_query';
+import { useTrailingTileSeries } from './use_trailing_tile_series';
 import type { TimeRange } from '../../use_time_range_param';
 import {
   getEntityFilterESQL,
@@ -173,16 +179,65 @@ const useNewlyHighCriticalCountPrevPeriod = ({
   };
 };
 
-/** Delta variant — runs a lazily-started prev-period query after the main count resolves. */
+/**
+ * Sparkline series: one dot per step (hourly for 24h, 6-hourly for 7d, daily for 30d), each the
+ * tile's count k steps ago. Dots whose history does not reach back far enough are left out.
+ */
+const useNewlyHighCriticalTrend = ({
+  spaceId,
+  skip,
+  timeRange = '24h',
+  entityFilters = EMPTY_ENTITY_FILTERS,
+}: NewlyHCTileOpts) => {
+  const { data: resolvedIndex, isLoading: isIndexLoading } =
+    useResolvedLatestEntitiesIndexName(spaceId);
+
+  const query = useMemo(
+    () =>
+      resolvedIndex?.indexName
+        ? buildNewlyHighCriticalTrailingSeriesQuery(
+            spaceId,
+            resolvedIndex.indexName,
+            timeRange,
+            getEntityFilterESQL(entityFilters)
+          )
+        : null,
+    [spaceId, resolvedIndex?.indexName, timeRange, entityFilters]
+  );
+
+  return useTrailingTileSeries({
+    tileKey: 'newlyHighCritical',
+    query,
+    timeRange,
+    columnOf: trailingNewlyHighCriticalColumn,
+    parse: parseNewlyHighCriticalDots,
+    enabled: !skip && !isIndexLoading,
+    errorMessage: i18n.translate(
+      'xpack.securitySolution.entityAnalytics.home.newlyHighCriticalTrend.queryError',
+      { defaultMessage: 'There was an error loading the newly high/critical trend' }
+    ),
+  });
+};
+
+/**
+ * Delta variant — runs a lazily-started prev-period query after the main count resolves, and the
+ * sparkline series once both the count and the delta have resolved.
+ */
 export const useNewlyHighCriticalCountWithDelta = (opts: NewlyHCTileOpts) => {
   const main = useNewlyHighCriticalCount(opts);
   const prev = useNewlyHighCriticalCountPrevPeriod({
     ...opts,
     skip: opts.skip || main.isLoading,
   });
+  const trend = useNewlyHighCriticalTrend({
+    ...opts,
+    skip: opts.skip || main.isLoading || prev.isLoading || main.isMissingIndex,
+  });
   return {
     ...main,
     delta: prev.isLoading ? undefined : main.count - prev.count,
     isDeltaLoading: prev.isLoading,
+    trend: trend.values,
+    isTrendLoading: trend.isLoading,
   };
 };

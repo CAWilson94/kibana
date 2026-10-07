@@ -209,6 +209,8 @@ export const EntityAnalyticsNewHomePage: React.FC = () => {
     isLoading: newlyHCLoading,
     isMissingIndex: newlyHCMissingIndex,
     isDeltaLoading: newlyHCDeltaLoading,
+    trend: newlyHCTrend,
+    isTrendLoading: newlyHCTrendLoading,
   } = useNewlyHighCriticalCount({
     spaceId: resolvedSpaceId,
     timeRange,
@@ -399,6 +401,8 @@ export const EntityAnalyticsNewHomePage: React.FC = () => {
         value: newlyHCCount,
         delta: newlyHCDelta,
         isDeltaLoading: newlyHCDeltaLoading,
+        trend: newlyHCTrend,
+        isTrendLoading: newlyHCTrendLoading,
         isLoading: newlyHCLoading,
         noDataMessage: newlyHCMissingIndex
           ? i18n.translate(
@@ -512,6 +516,8 @@ export const EntityAnalyticsNewHomePage: React.FC = () => {
       newlyHCCount,
       newlyHCDelta,
       newlyHCDeltaLoading,
+      newlyHCTrend,
+      newlyHCTrendLoading,
       newlyHCLoading,
       newlyHCMissingIndex,
       watchlistedCount,
