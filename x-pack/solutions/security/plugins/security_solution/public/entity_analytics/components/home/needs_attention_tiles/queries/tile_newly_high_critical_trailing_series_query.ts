@@ -20,6 +20,9 @@ export const trailingNewlyHighCriticalColumn = (k: number): string => `newly_hig
 /** Returns the column that counts the entities that have a boundary score for dot `k`. */
 export const trailingBoundaryRowsColumn = (k: number): string => `boundary_rows_${k}`;
 
+/** The level is packed behind the age in seconds: `packed = secondsAgo * 8 + level` (levels are 0 to 4). */
+const LEVEL_SLOTS = 8;
+
 /**
  * Builds one query that returns every sparkline dot of the Newly high/critical tile as columns of
  * a single row, where dot `k` is what the tile would have shown `k` steps ago.
@@ -27,7 +30,12 @@ export const trailingBoundaryRowsColumn = (k: number): string => `boundary_rows_
  * It follows the tile's query: an entity's level is its latest level in the selected time range
  * ending `k` steps back (current) and its latest level in the 2h buffer before the start of that
  * range (boundary), and it counts when it is High or Critical now and was not at the boundary,
- * or has no boundary score. Both levels of every dot are taken per entity with filtered `LAST`s.
+ * or has no boundary score.
+ *
+ * "The latest level in a window" is picked with a filtered `MIN` over the level packed behind its
+ * age in seconds (`secondsAgo * 8 + level`): the smallest age wins and carries its level. A
+ * filtered `LAST(level, @timestamp) WHERE ...` is not used because it drops values and differs
+ * from run to run on the Elasticsearch builds checked.
  *
  * Because a missing boundary score counts as "newly", a dot whose boundary lies before the oldest
  * score in the index would count every High or Critical entity. `boundary_rows_k` tells how many
@@ -47,10 +55,8 @@ export const buildNewlyHighCriticalTrailingSeriesQuery = (
     const from = k * stepHours;
     const boundary = from + rangeHours;
     return [
-      `cur_${k} = LAST(level_num, @timestamp) WHERE hours_ago >= ${from} AND hours_ago <= ${
-        boundary - 1
-      }`,
-      `bnd_${k} = LAST(level_num, @timestamp) WHERE hours_ago >= ${boundary} AND hours_ago <= ${
+      `cur_${k} = MIN(packed) WHERE hours_ago >= ${from} AND hours_ago <= ${boundary - 1}`,
+      `bnd_${k} = MIN(packed) WHERE hours_ago >= ${boundary} AND hours_ago <= ${
         boundary + BOUNDARY_SLICE_HOURS - 1
       }`,
     ];
@@ -59,7 +65,7 @@ export const buildNewlyHighCriticalTrailingSeriesQuery = (
   const perDot = Array.from({ length: dots }, (_, k) => [
     `${trailingNewlyHighCriticalColumn(
       k
-    )} = COUNT_DISTINCT(effective_id) WHERE cur_${k} >= 3 AND (bnd_${k} IS NULL OR bnd_${k} < 3)`,
+    )} = COUNT_DISTINCT(effective_id) WHERE cur_${k} % ${LEVEL_SLOTS} >= 3 AND (bnd_${k} IS NULL OR bnd_${k} % ${LEVEL_SLOTS} < 3)`,
     `${trailingBoundaryRowsColumn(k)} = COUNT(bnd_${k})`,
   ]).flat();
 
@@ -71,7 +77,8 @@ export const buildNewlyHighCriticalTrailingSeriesQuery = (
     `| EVAL risk_level = COALESCE(host.risk.calculated_level, user.risk.calculated_level, service.risk.calculated_level)`,
     `| WHERE entity_euid IS NOT NULL`,
     `| EVAL level_num = CASE(risk_level == "Critical", 4, risk_level == "High", 3, risk_level == "Moderate", 2, risk_level == "Low", 1, 0)`,
-    `| EVAL hours_ago = DATE_DIFF("hour", @timestamp, NOW())`,
+    `| EVAL hours_ago = DATE_DIFF("hour", @timestamp, NOW()), seconds_ago = DATE_DIFF("second", @timestamp, NOW())`,
+    `| EVAL packed = seconds_ago * ${LEVEL_SLOTS} + level_num`,
     `| STATS`,
     `    ${perEntity.join(',\n    ')}`,
     `    BY entity_euid`,
