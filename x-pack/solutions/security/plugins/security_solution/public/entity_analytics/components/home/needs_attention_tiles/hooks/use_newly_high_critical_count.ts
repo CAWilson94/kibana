@@ -70,7 +70,7 @@ export const useNewlyHighCriticalCount = ({
 
   const {
     data: queryResult,
-    isLoading,
+    isInitialLoading,
     isFetching,
     error,
   } = useQuery<{ count: number; entityIds: string[] }, SecurityAppError>(
@@ -116,7 +116,8 @@ export const useNewlyHighCriticalCount = ({
   return {
     count: queryResult?.count ?? 0,
     entityIds: isFetching ? EMPTY_ENTITY_IDS : queryResult?.entityIds ?? EMPTY_ENTITY_IDS,
-    isLoading: isIndexLoading || isLoading || isFetching,
+    // isInitialLoading, not isLoading: a switched-off query reports isLoading forever in react-query v4.
+    isLoading: isIndexLoading || isInitialLoading || isFetching,
     isMissingIndex,
     error: filteredError ?? indexError,
   };
@@ -149,7 +150,7 @@ const useNewlyHighCriticalCountPrevPeriod = ({
 
   const {
     data: queryResult,
-    isLoading,
+    isInitialLoading,
     isFetching,
   } = useQuery<{ count: number }, SecurityAppError>(
     ['newlyHighCriticalCountPrevPeriod', query],
@@ -175,7 +176,7 @@ const useNewlyHighCriticalCountPrevPeriod = ({
 
   return {
     count: queryResult?.count ?? 0,
-    isLoading: isLoading || isFetching,
+    isLoading: isInitialLoading || isFetching,
   };
 };
 
