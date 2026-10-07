@@ -22,6 +22,7 @@ import {
 } from '../queries/entities_with_alerts_query';
 import type { TimeRange } from '../../use_time_range_param';
 import { EMPTY_ENTITY_IDS } from '../data';
+import { useAlertBasedTilesTrend } from './use_alert_based_tiles_trend';
 import {
   getEntityFilterESQL,
   EMPTY_ENTITY_FILTERS,
@@ -252,6 +253,11 @@ export const useAlertBasedTilesWithDelta = (opts: AlertTileOpts) => {
     // Only start the prev-period query once the main count has resolved.
     skip: opts.skip || main.isLoading,
   });
+  const trend = useAlertBasedTilesTrend({
+    ...opts,
+    // The sparkline starts only once both the count and the delta have resolved.
+    skip: opts.skip || main.isLoading || prev.isLoading,
+  });
 
   return {
     ...main,
@@ -261,5 +267,8 @@ export const useAlertBasedTilesWithDelta = (opts: AlertTileOpts) => {
     alertsDelta: prev.isLoading ? undefined : main.alertsCount - prev.alertsCount,
     watchlistedDelta: prev.isLoading ? undefined : main.watchlistedCount - prev.watchlistedCount,
     isDeltaLoading: prev.isLoading,
+    alertsTrend: trend.alertsTrend,
+    watchlistedTrend: trend.watchlistedTrend,
+    isTrendLoading: trend.isLoading,
   };
 };

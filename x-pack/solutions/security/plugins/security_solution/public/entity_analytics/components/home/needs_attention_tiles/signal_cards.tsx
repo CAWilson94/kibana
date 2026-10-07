@@ -23,6 +23,7 @@ import { i18n } from '@kbn/i18n';
 
 import { getDeltaPercentage } from './delta_percentage';
 import type { ActiveFilter, SignalCardData, SignalCardId } from './data';
+import { TileSparkline } from './tile_sparkline';
 
 export interface SignalCardsProps {
   activeFilter: ActiveFilter | null;
@@ -318,6 +319,21 @@ const SignalMetricCard: React.FC<SignalMetricCardProps> = ({
   const borderColor = selected ? activeBorder : emphasized ? hoverBorder : defaultBorder;
   const displayTitle = card.title;
   const displayDescription = displayDescriptionFor(card);
+  // Reserve the sparkline space while its query is in flight so the card does not jump.
+  const showTrend = !isLoading && !isZero && (card.trend !== undefined || card.isTrendLoading);
+  const trendAriaLabel = i18n.translate(
+    'xpack.securitySolution.entityAnalytics.facelift.signalCards.trendAriaLabel',
+    {
+      defaultMessage:
+        'Trend for {title} over the selected time range: from {first} to {last}. Peak {peak}.',
+      values: {
+        title: displayTitle,
+        first: card.trend?.[0] ?? 0,
+        last: card.trend?.[card.trend.length - 1] ?? 0,
+        peak: card.trend ? Math.max(0, ...card.trend) : 0,
+      },
+    }
+  );
 
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
@@ -455,6 +471,16 @@ const SignalMetricCard: React.FC<SignalMetricCardProps> = ({
             min-block-size: ${euiTheme.size.m};
           `}
         />
+
+        {showTrend && (
+          <div
+            css={css`
+              margin-block-end: ${euiTheme.size.s};
+            `}
+          >
+            <TileSparkline values={card.trend} ariaLabel={trendAriaLabel} />
+          </div>
+        )}
 
         <EuiFlexGroup
           gutterSize="s"
