@@ -194,6 +194,8 @@ export const EntityAnalyticsNewHomePage: React.FC = () => {
     isLoading: riskMoversLoading,
     isMissingIndex: riskMoversMissingIndex,
     isDeltaLoading: riskMoversDeltaLoading,
+    trend: riskMoversTrend,
+    isTrendLoading: riskMoversTrendLoading,
   } = useRiskMoversCount({
     spaceId: resolvedSpaceId,
     timeRange,
@@ -355,6 +357,8 @@ export const EntityAnalyticsNewHomePage: React.FC = () => {
         value: riskMoversCount,
         delta: riskMoversDelta,
         isDeltaLoading: riskMoversDeltaLoading,
+        trend: riskMoversTrend,
+        isTrendLoading: riskMoversTrendLoading,
         isLoading: riskMoversLoading,
         noDataMessage: riskMoversMissingIndex
           ? i18n.translate('xpack.securitySolution.entityAnalytics.home.tiles.riskMovers.noData', {
@@ -502,6 +506,8 @@ export const EntityAnalyticsNewHomePage: React.FC = () => {
       riskMoversCount,
       riskMoversDelta,
       riskMoversDeltaLoading,
+      riskMoversTrend,
+      riskMoversTrendLoading,
       riskMoversLoading,
       newlyHCCount,
       newlyHCDelta,

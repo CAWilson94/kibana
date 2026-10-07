@@ -20,6 +20,11 @@ import {
   riskMoversWindow,
   riskMoversPrevWindow,
 } from '../queries/tile_risk_movers_query';
+import {
+  buildRiskMoversTrailingSeriesQuery,
+  trailingRiskMoversColumn,
+} from '../queries/tile_risk_movers_trailing_series_query';
+import { useTrailingTileSeries } from './use_trailing_tile_series';
 import type { TimeRange } from '../../use_time_range_param';
 import {
   getEntityFilterESQL,
@@ -173,16 +178,61 @@ const useRiskMoversCountPrevPeriod = ({
   };
 };
 
-/** Delta variant — runs a lazily-started prev-period query after the main count resolves. */
+/** Sparkline series: one dot per step (hourly for 24h, 6-hourly for 7d, daily for 30d), each the tile's count k steps ago. */
+const useRiskMoversTrend = ({
+  spaceId,
+  skip,
+  timeRange = '24h',
+  entityFilters = EMPTY_ENTITY_FILTERS,
+}: RiskMoversTileOpts) => {
+  const { data: resolvedIndex, isLoading: isIndexLoading } =
+    useResolvedLatestEntitiesIndexName(spaceId);
+
+  const query = useMemo(
+    () =>
+      resolvedIndex?.indexName
+        ? buildRiskMoversTrailingSeriesQuery(
+            spaceId,
+            resolvedIndex.indexName,
+            timeRange,
+            getEntityFilterESQL(entityFilters)
+          )
+        : null,
+    [spaceId, resolvedIndex?.indexName, timeRange, entityFilters]
+  );
+
+  return useTrailingTileSeries({
+    tileKey: 'riskMovers',
+    query,
+    timeRange,
+    columnOf: trailingRiskMoversColumn,
+    enabled: !skip && !isIndexLoading,
+    errorMessage: i18n.translate(
+      'xpack.securitySolution.entityAnalytics.home.riskMoversTrend.queryError',
+      { defaultMessage: 'There was an error loading the risk movers trend' }
+    ),
+  });
+};
+
+/**
+ * Delta variant — runs a lazily-started prev-period query after the main count resolves, and the
+ * sparkline series once both the count and the delta have resolved.
+ */
 export const useRiskMoversCountWithDelta = (opts: RiskMoversTileOpts) => {
   const main = useRiskMoversCount(opts);
   const prev = useRiskMoversCountPrevPeriod({
     ...opts,
     skip: opts.skip || main.isLoading,
   });
+  const trend = useRiskMoversTrend({
+    ...opts,
+    skip: opts.skip || main.isLoading || prev.isLoading || main.isMissingIndex,
+  });
   return {
     ...main,
     delta: prev.isLoading ? undefined : main.count - prev.count,
     isDeltaLoading: prev.isLoading,
+    trend: trend.values,
+    isTrendLoading: trend.isLoading,
   };
 };
