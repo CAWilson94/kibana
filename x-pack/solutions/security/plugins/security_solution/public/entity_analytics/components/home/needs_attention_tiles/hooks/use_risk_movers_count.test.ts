@@ -9,7 +9,7 @@ import { renderHook } from '@testing-library/react';
 import { useQuery } from '@kbn/react-query';
 import { useKibana } from '../../../../../common/lib/kibana';
 import { useResolvedLatestEntitiesIndexName } from '../../../../../common/hooks/use_resolved_latest_entities_index_name';
-import { useRiskMoversCountWithDelta } from './use_risk_movers_count';
+import { useRiskMoversCount, useRiskMoversCountWithDelta } from './use_risk_movers_count';
 import { useTrailingTileSeries } from './use_trailing_tile_series';
 
 jest.mock('@kbn/react-query', () => ({ useQuery: jest.fn() }));
@@ -83,5 +83,46 @@ describe('useRiskMoversCountWithDelta trend', () => {
     mockUseIndex.mockReturnValue({ data: undefined, isLoading: false });
     renderHook(() => useRiskMoversCountWithDelta(opts));
     expect(lastTrailingArgs().query).toBeNull();
+  });
+});
+
+describe('useRiskMoversCount loading state', () => {
+  // What react-query v4 reports for a query that is switched off and has no data yet.
+  const switchedOffQuery = {
+    data: undefined,
+    isLoading: true,
+    isInitialLoading: false,
+    isFetching: false,
+    error: undefined,
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockUseKibana.mockReturnValue({ services: { data: { search: { search: jest.fn() } } } });
+    mockUseIndex.mockReturnValue({ data: undefined, isLoading: false });
+    mockUseTrailing.mockReturnValue({ values: undefined, isLoading: false });
+  });
+
+  it('is not loading while its query is switched off, so the tile does not keep its spinner', () => {
+    mockUseQuery.mockReturnValue(switchedOffQuery);
+    const { result } = renderHook(() => useRiskMoversCount(opts));
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.count).toBe(0);
+  });
+
+  it('does not keep the delta loading while the queries are switched off', () => {
+    mockUseQuery.mockReturnValue(switchedOffQuery);
+    const { result } = renderHook(() => useRiskMoversCountWithDelta(opts));
+    expect(result.current.isDeltaLoading).toBe(false);
+  });
+
+  it('is loading while the entities index is resolving, or while the query runs', () => {
+    mockUseQuery.mockReturnValue(switchedOffQuery);
+    mockUseIndex.mockReturnValue({ data: undefined, isLoading: true });
+    expect(renderHook(() => useRiskMoversCount(opts)).result.current.isLoading).toBe(true);
+
+    mockUseIndex.mockReturnValue({ data: { indexName: '.entities-v1' }, isLoading: false });
+    mockUseQuery.mockReturnValue({ ...switchedOffQuery, isInitialLoading: true, isFetching: true });
+    expect(renderHook(() => useRiskMoversCount(opts)).result.current.isLoading).toBe(true);
   });
 });
