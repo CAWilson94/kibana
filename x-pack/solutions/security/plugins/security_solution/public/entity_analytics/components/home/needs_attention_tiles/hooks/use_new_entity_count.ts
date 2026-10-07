@@ -15,6 +15,11 @@ import { useKibana } from '../../../../../common/lib/kibana';
 import { useErrorToast } from '../../../../../common/hooks/use_error_toast';
 import { useResolvedLatestEntitiesIndexName } from '../../../../../common/hooks/use_resolved_latest_entities_index_name';
 import { EMPTY_ENTITY_IDS } from '../data';
+import {
+  buildNewEntityTrailingSeriesQuery,
+  trailingNewEntityColumn,
+} from '../queries/new_entity_trailing_series_query';
+import { useTrailingTileSeries } from './use_trailing_tile_series';
 import type { TimeRange } from '../../use_time_range_param';
 import {
   getEntityFilterESQL,
@@ -196,16 +201,59 @@ const useNewEntityCountPrevPeriod = ({
   };
 };
 
-/** Delta variant — runs a lazily-started prev-period query after the main count resolves. */
+/** Sparkline series: one dot per step (hourly for 24h, 6-hourly for 7d, daily for 30d), each the tile's count k steps ago. */
+const useNewEntityTrend = ({
+  spaceId,
+  skip,
+  timeRange = '7d',
+  entityFilters = EMPTY_ENTITY_FILTERS,
+}: NewEntityTileOpts) => {
+  const { data: resolvedIndex } = useResolvedLatestEntitiesIndexName(spaceId);
+  const index = resolvedIndex?.indexName;
+
+  const query = useMemo(
+    () =>
+      index
+        ? buildNewEntityTrailingSeriesQuery(index, timeRange, getEntityFilterESQL(entityFilters))
+        : null,
+    [index, timeRange, entityFilters]
+  );
+
+  return useTrailingTileSeries({
+    tileKey: 'newEntity',
+    query,
+    timeRange,
+    columnOf: trailingNewEntityColumn,
+    enabled: !skip,
+    localOnly: true,
+    errorMessage: i18n.translate(
+      'xpack.securitySolution.entityAnalytics.home.newEntityTrend.queryError',
+      {
+        defaultMessage: 'There was an error loading the new entity trend',
+      }
+    ),
+  });
+};
+
+/**
+ * Delta variant — runs a lazily-started prev-period query after the main count resolves, and
+ * the sparkline series once both the count and the delta have resolved.
+ */
 export const useNewEntityCountWithDelta = (opts: NewEntityTileOpts) => {
   const main = useNewEntityCount(opts);
   const prev = useNewEntityCountPrevPeriod({
     ...opts,
     skip: opts.skip || main.isLoading,
   });
+  const trend = useNewEntityTrend({
+    ...opts,
+    skip: opts.skip || main.isLoading || prev.isLoading,
+  });
   return {
     ...main,
     delta: prev.isLoading ? undefined : main.count - prev.count,
     isDeltaLoading: prev.isLoading,
+    trend: trend.values,
+    isTrendLoading: trend.isLoading,
   };
 };

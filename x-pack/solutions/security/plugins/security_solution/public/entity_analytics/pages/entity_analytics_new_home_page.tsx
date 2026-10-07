@@ -177,6 +177,8 @@ export const EntityAnalyticsNewHomePage: React.FC = () => {
     entityIds: newEntityEntityIds,
     isLoading: newEntityLoading,
     isDeltaLoading: newEntityDeltaLoading,
+    trend: newEntityTrend,
+    isTrendLoading: newEntityTrendLoading,
   } = useNewEntityCount({
     spaceId: resolvedSpaceId,
     timeRange,
@@ -459,6 +461,8 @@ export const EntityAnalyticsNewHomePage: React.FC = () => {
         value: newEntityCount,
         delta: newEntityDelta,
         isDeltaLoading: newEntityDeltaLoading,
+        trend: newEntityTrend,
+        isTrendLoading: newEntityTrendLoading,
         isLoading: newEntityLoading,
         description: i18n.translate(
           'xpack.securitySolution.entityAnalytics.home.tiles.newEntity.description',
@@ -503,6 +507,8 @@ export const EntityAnalyticsNewHomePage: React.FC = () => {
       newEntityCount,
       newEntityDelta,
       newEntityDeltaLoading,
+      newEntityTrend,
+      newEntityTrendLoading,
       newEntityLoading,
       riskMoversMissingIndex,
       timeRange,
