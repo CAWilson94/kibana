@@ -165,6 +165,8 @@ export const EntityAnalyticsNewHomePage: React.FC = () => {
     entityIds: anomaliesEntityIds,
     isLoading: anomaliesLoading,
     isDeltaLoading: anomaliesDeltaLoading,
+    trend: anomaliesTrend,
+    isTrendLoading: anomaliesTrendLoading,
   } = useEntitiesWithAnomaliesCount({
     spaceId: resolvedSpaceId,
     timeRange,
@@ -324,6 +326,8 @@ export const EntityAnalyticsNewHomePage: React.FC = () => {
         value: anomaliesCount,
         delta: anomaliesDelta,
         isDeltaLoading: anomaliesDeltaLoading,
+        trend: anomaliesTrend,
+        isTrendLoading: anomaliesTrendLoading,
         isLoading: anomaliesLoading,
         description: i18n.translate(
           'xpack.securitySolution.entityAnalytics.home.tiles.entitiesWithAnomalies.description',
@@ -492,6 +496,8 @@ export const EntityAnalyticsNewHomePage: React.FC = () => {
       anomaliesCount,
       anomaliesDelta,
       anomaliesDeltaLoading,
+      anomaliesTrend,
+      anomaliesTrendLoading,
       anomaliesLoading,
       riskMoversCount,
       riskMoversDelta,
