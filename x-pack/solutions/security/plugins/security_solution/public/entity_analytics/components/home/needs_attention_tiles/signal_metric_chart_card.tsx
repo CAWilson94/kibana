@@ -161,9 +161,10 @@ export const SignalMetricChartCard: React.FC<SignalMetricChartCardProps> = ({
     <div
       data-test-subj={`eaFaceliftSignalCard-${card.id}`}
       css={css`
+        position: relative;
         block-size: 100%;
-        /* The chart fills its parent, so without a floor it collapses. 160px keeps Metric in the
-           bracket that shows the title, description, count and delta. */
+        /* A floor, so the card never collapses. 160px keeps Metric in the size bracket that shows
+           the title, description, count and delta. */
         min-block-size: calc(${euiTheme.size.xxxxl} * 2.5);
         border: 1px solid
           ${selected ? euiTheme.colors.borderStrongPrimary : euiTheme.colors.borderBasePlain};
@@ -174,17 +175,26 @@ export const SignalMetricChartCard: React.FC<SignalMetricChartCardProps> = ({
           opacity ${euiTheme.animation.fast} ${euiTheme.animation.resistance};
       `}
     >
-      <Chart>
-        <Settings
-          baseTheme={chartBaseTheme}
-          locale={i18n.getLocale()}
-          // 'middle': title, description, then the count, then the delta below it. The default
-          // ('bottom') puts the delta above the count.
-          theme={{ metric: { valuePosition: 'middle' } }}
-          onElementClick={interactive ? onToggle : undefined}
-        />
-        <Metric id={`eaSignalMetric-${card.id}`} data={[[datum]]} />
-      </Chart>
+      {/* The chart sizes itself as 100% of its parent, which is only definite when absolutely
+          positioned inside the card. */}
+      <div
+        css={css`
+          position: absolute;
+          inset: 0;
+        `}
+      >
+        <Chart>
+          <Settings
+            baseTheme={chartBaseTheme}
+            locale={i18n.getLocale()}
+            // 'middle': title, description, then the count, then the delta below it. The default
+            // ('bottom') puts the delta above the count.
+            theme={{ metric: { valuePosition: 'middle' } }}
+            onElementClick={interactive ? onToggle : undefined}
+          />
+          <Metric id={`eaSignalMetric-${card.id}`} data={[[datum]]} />
+        </Chart>
+      </div>
     </div>
   );
 
@@ -206,6 +216,12 @@ export const SignalMetricChartCard: React.FC<SignalMetricChartCardProps> = ({
             )
       }
       display="block"
+      // Lets the card fill the grid cell; otherwise the anchor is only as tall as its content.
+      anchorProps={{
+        css: css`
+          block-size: 100%;
+        `,
+      }}
     >
       {chartNode}
     </EuiToolTip>
