@@ -81,6 +81,8 @@ export const buildSignalMetricDatum = (
       value: `${sign}${card.delta}${percentage !== undefined ? ` (${sign}${percentage}%)` : ''}`,
       label: vsPreviousPeriod,
       labelPosition: 'after',
+      // The chart styles the whole row at weight 500; regular keeps the label light.
+      style: { fontWeight: 'normal' },
       icon: isPositive ? TREND_UP : TREND_DOWN,
       badgeColor: isPositive ? colors.increaseBadge : colors.decreaseBadge,
       badgeTextColor: isPositive ? colors.increaseText : colors.decreaseText,
@@ -189,7 +191,14 @@ export const SignalMetricChartCard: React.FC<SignalMetricChartCardProps> = ({
             locale={i18n.getLocale()}
             // 'middle': title, description, then the count, then the delta below it. The default
             // ('bottom') puts the delta above the count.
-            theme={{ metric: { valuePosition: 'middle' } }}
+            // The delta label takes the chart's own text colour by default; make it subdued grey.
+            theme={{
+              metric: {
+                valuePosition: 'middle',
+                textExtraLightColor: euiTheme.colors.textSubdued,
+                textExtraDarkColor: euiTheme.colors.textSubdued,
+              },
+            }}
             onElementClick={interactive ? onToggle : undefined}
           />
           <Metric id={`eaSignalMetric-${card.id}`} data={[[datum]]} />
