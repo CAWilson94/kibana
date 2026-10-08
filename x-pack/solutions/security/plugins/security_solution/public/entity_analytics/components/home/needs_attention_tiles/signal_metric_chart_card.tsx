@@ -162,6 +162,9 @@ export const SignalMetricChartCard: React.FC<SignalMetricChartCardProps> = ({
       data-test-subj={`eaFaceliftSignalCard-${card.id}`}
       css={css`
         block-size: 100%;
+        /* The chart fills its parent, so without a floor it collapses. 160px keeps Metric in the
+           bracket that shows the title, description, count and delta. */
+        min-block-size: calc(${euiTheme.size.xxxxl} * 2.5);
         border: 1px solid
           ${selected ? euiTheme.colors.borderStrongPrimary : euiTheme.colors.borderBasePlain};
         border-radius: ${euiTheme.border.radius.medium};
