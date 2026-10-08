@@ -24,6 +24,7 @@ import { i18n } from '@kbn/i18n';
 import { getDeltaPercentage } from './delta_percentage';
 import type { ActiveFilter, SignalCardData, SignalCardId } from './data';
 import { TileSparkline } from './tile_sparkline';
+import { SignalMetricChartCard } from './signal_metric_chart_card';
 
 export interface SignalCardsProps {
   activeFilter: ActiveFilter | null;
@@ -634,13 +635,23 @@ export const SignalCards: React.FC<SignalCardsProps> = ({
                   }
                 `}
               >
-                <SignalMetricCard
-                  card={card}
-                  selected={selected}
-                  dimmed={dimmed}
-                  isExpanded={isExpanded}
-                  onToggle={() => onFilterForCard(card.id)}
-                />
+                {card.id === 'newEntity' ? (
+                  // Spike: this one tile is drawn with the EUI charts Metric chart.
+                  <SignalMetricChartCard
+                    card={card}
+                    selected={selected}
+                    dimmed={dimmed}
+                    onToggle={() => onFilterForCard(card.id)}
+                  />
+                ) : (
+                  <SignalMetricCard
+                    card={card}
+                    selected={selected}
+                    dimmed={dimmed}
+                    isExpanded={isExpanded}
+                    onToggle={() => onFilterForCard(card.id)}
+                  />
+                )}
               </div>
             );
           })}
