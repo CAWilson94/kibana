@@ -161,7 +161,7 @@ export const SignalMetricChartCard: React.FC<SignalMetricChartCardProps> = ({
     <div
       data-test-subj={`eaFaceliftSignalCard-${card.id}`}
       css={css`
-        block-size: calc(${euiTheme.base}px * 11);
+        block-size: 100%;
         border: 1px solid
           ${selected ? euiTheme.colors.borderStrongPrimary : euiTheme.colors.borderBasePlain};
         border-radius: ${euiTheme.border.radius.medium};
