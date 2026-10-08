@@ -10,13 +10,16 @@ import { render } from '@testing-library/react';
 import type { SignalCardData } from './data';
 import { SignalMetricChartCard, buildSignalMetricDatum } from './signal_metric_chart_card';
 
-let mockSettingsProps: { onElementClick?: () => void } = {};
+let mockSettingsProps: {
+  onElementClick?: () => void;
+  theme?: { metric?: { valuePosition?: string } };
+} = {};
 let mockMetricProps: { data: Array<Array<Record<string, unknown>>> } = { data: [[]] };
 
 jest.mock('@kbn/charts-theme', () => ({ useElasticChartsTheme: () => ({}) }));
 jest.mock('@elastic/charts', () => ({
   Chart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  Settings: (props: { onElementClick?: () => void }) => {
+  Settings: (props: typeof mockSettingsProps) => {
     mockSettingsProps = props;
     return null;
   },
@@ -129,6 +132,13 @@ describe('SignalMetricChartCard', () => {
     expect(mockMetricProps.data).toHaveLength(1);
     expect(mockMetricProps.data[0]).toHaveLength(1);
     expect(mockMetricProps.data[0][0]).toMatchObject({ title: 'New entity', value: 40 });
+  });
+
+  it('puts the count above the delta', () => {
+    render(
+      <SignalMetricChartCard card={card()} selected={false} dimmed={false} onToggle={jest.fn()} />
+    );
+    expect(mockSettingsProps.theme?.metric?.valuePosition).toBe('middle');
   });
 
   it('toggles the filter when the chart is clicked', () => {

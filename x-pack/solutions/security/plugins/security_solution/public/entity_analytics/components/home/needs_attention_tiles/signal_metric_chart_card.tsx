@@ -175,6 +175,9 @@ export const SignalMetricChartCard: React.FC<SignalMetricChartCardProps> = ({
         <Settings
           baseTheme={chartBaseTheme}
           locale={i18n.getLocale()}
+          // 'middle': title, description, then the count, then the delta below it. The default
+          // ('bottom') puts the delta above the count.
+          theme={{ metric: { valuePosition: 'middle' } }}
           onElementClick={interactive ? onToggle : undefined}
         />
         <Metric id={`eaSignalMetric-${card.id}`} data={[[datum]]} />
