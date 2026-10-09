@@ -10,7 +10,7 @@ import { EuiPanel, useEuiTheme } from '@elastic/eui';
 import { css } from '@emotion/react';
 
 import type { ActiveFilter, SignalCardData, SignalCardId } from './data';
-import { SignalMetricChartCard } from './signal_metric_chart_card';
+import { SignalCard } from './signal_card';
 
 export interface SignalCardsProps {
   activeFilter: ActiveFilter | null;
@@ -74,7 +74,6 @@ export const SignalCards: React.FC<SignalCardsProps> = ({
   onFilterForCard,
 }) => {
   const { euiTheme } = useEuiTheme();
-  const anySelected = activeFilter?.type === 'card';
 
   return (
     <EuiPanel
@@ -96,7 +95,6 @@ export const SignalCards: React.FC<SignalCardsProps> = ({
       >
         {cards.map((card) => {
           const selected = activeFilter?.type === 'card' && activeFilter.cardId === card.id;
-          const dimmed = Boolean(anySelected && !selected);
 
           return (
             <div
@@ -113,10 +111,9 @@ export const SignalCards: React.FC<SignalCardsProps> = ({
                 }
               `}
             >
-              <SignalMetricChartCard
+              <SignalCard
                 card={card}
                 selected={selected}
-                dimmed={dimmed}
                 onToggle={() => onFilterForCard(card.id)}
               />
             </div>
