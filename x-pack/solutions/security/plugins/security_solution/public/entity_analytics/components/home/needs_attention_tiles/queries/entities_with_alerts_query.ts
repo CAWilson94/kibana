@@ -10,7 +10,7 @@ import type { TimeRange } from '../../use_time_range_param';
 import type { SimpleTimeWindow } from './tile_time_window';
 import { buildAlertEuidPipeline } from './alert_euid_pipeline';
 
-const alertsIndex = (spaceId: string) => `.alerts-security.alerts-${spaceId}`;
+export const alertsIndex = (spaceId: string) => `.alerts-security.alerts-${spaceId}`;
 
 const DOUBLE_TIME_RANGE: Record<TimeRange, string> = {
   '24h': '48h',

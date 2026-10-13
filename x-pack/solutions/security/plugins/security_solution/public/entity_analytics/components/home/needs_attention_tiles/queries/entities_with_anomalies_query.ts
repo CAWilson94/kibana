@@ -10,7 +10,7 @@ import type { TimeRange } from '../../use_time_range_param';
 import type { SimpleTimeWindow } from './tile_time_window';
 import { evalGuardedTypedEuids } from './guarded_typed_euid_eval';
 
-const ML_ANOMALIES_INDEX = '.ml-anomalies-shared*';
+export const ML_ANOMALIES_INDEX = '.ml-anomalies-shared*';
 const ENTITY_TYPES = ['user', 'host', 'service'] as const;
 
 const DOUBLE_TIME_RANGE: Record<TimeRange, string> = {
