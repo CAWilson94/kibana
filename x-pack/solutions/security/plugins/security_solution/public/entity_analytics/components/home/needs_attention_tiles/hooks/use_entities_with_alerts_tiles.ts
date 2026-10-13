@@ -233,12 +233,24 @@ const useAlertBasedTilesPrevPeriod = ({
 };
 
 /**
+ * Replaces the newest dot with the live tile count, so the sparkline never ends on a different
+ * number than the tile shows. The older dots stay as they were cached.
+ */
+export const withLiveLastDot = (
+  trend: number[] | undefined,
+  liveCount: number,
+  isLiveCountReady: boolean
+): number[] | undefined =>
+  trend && trend.length > 0 && isLiveCountReady ? [...trend.slice(0, -1), liveCount] : trend;
+
+/**
  * Delta variant of useAlertBasedTiles.
  *
  * Runs two separate queries: the main tile query (current period, unchanged
  * from useAlertBasedTiles) and a previous-period query that starts lazily
  * once the main count has resolved. The delta pill therefore never delays
- * the primary tile count.
+ * the primary tile count. The all-ranges sparkline query starts at the same time as the
+ * previous-period query, separately from it.
  *
  * The previous-period query uses a 30-minute staleTime — that window barely
  * changes between renders, so it is almost always served from cache after
@@ -255,8 +267,9 @@ export const useAlertBasedTilesWithDelta = (opts: AlertTileOpts) => {
   });
   const trend = useAlertBasedTilesTrend({
     ...opts,
-    // The sparkline starts only once both the count and the delta have resolved.
-    skip: opts.skip || main.isLoading || prev.isLoading,
+    // The sparkline starts with the delta, once the count has resolved. It is a separate query, so
+    // a failing sparkline never changes the delta.
+    skip: opts.skip || main.isLoading,
   });
 
   return {
@@ -267,8 +280,12 @@ export const useAlertBasedTilesWithDelta = (opts: AlertTileOpts) => {
     alertsDelta: prev.isLoading ? undefined : main.alertsCount - prev.alertsCount,
     watchlistedDelta: prev.isLoading ? undefined : main.watchlistedCount - prev.watchlistedCount,
     isDeltaLoading: prev.isLoading,
-    alertsTrend: trend.alertsTrend,
-    watchlistedTrend: trend.watchlistedTrend,
+    alertsTrend: withLiveLastDot(trend.alertsTrend, main.alertsCount, !main.isLoading),
+    watchlistedTrend: withLiveLastDot(
+      trend.watchlistedTrend,
+      main.watchlistedCount,
+      !main.isLoading
+    ),
     isTrendLoading: trend.isLoading,
   };
 };
