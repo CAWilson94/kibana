@@ -114,6 +114,7 @@ import {
   WATCHLISTS_ENTITIES_ASSIGN_URL,
   WATCHLISTS_ENTITIES_UNASSIGN_URL,
   WATCHLISTS_MANUAL_ENTITIES_LIST_INTERNAL_URL,
+  WATCHLISTS_ENTITY_MEMBERSHIPS_URL,
 } from '../../../common/entity_analytics/watchlists/constants';
 import {
   RISK_SCORE_HISTORY_URL,
@@ -124,6 +125,7 @@ import type {
   AssignWatchlistEntitiesResponse,
 } from '../../../common/api/entity_analytics/watchlists/entities/assign.gen';
 import type { ListManualWatchlistEntitiesResponse } from '../../../common/api/entity_analytics/watchlists/entities/list_manual.gen';
+import type { GetEntityWatchlistMembershipsResponse } from '../../../common/api/entity_analytics/watchlists/entities/memberships.gen';
 import type {
   UnassignWatchlistEntitiesRequestBodyInput,
   UnassignWatchlistEntitiesResponse,
@@ -922,6 +924,19 @@ export const useEntityAnalyticsRoutes = () => {
         }
       );
 
+    const fetchEntityWatchlistMemberships = async (params: {
+      euid: string;
+      signal?: AbortSignal;
+      context?: KibanaExecutionContext;
+    }) =>
+      http.fetch<GetEntityWatchlistMembershipsResponse>(WATCHLISTS_ENTITY_MEMBERSHIPS_URL, {
+        version: API_VERSIONS.internal.v1,
+        method: 'GET',
+        query: { euid: params.euid },
+        signal: params.signal,
+        context: params.context,
+      });
+
     const listManualWatchlistEntities = async (params: {
       watchlistId: string;
       page: number;
@@ -1210,6 +1225,7 @@ export const useEntityAnalyticsRoutes = () => {
       assignWatchlistEntities,
       unassignWatchlistEntities,
       listManualWatchlistEntities,
+      fetchEntityWatchlistMemberships,
       listWatchlistEntitySources,
       updateWatchlistEntitySource,
       createWatchlistEntitySource,

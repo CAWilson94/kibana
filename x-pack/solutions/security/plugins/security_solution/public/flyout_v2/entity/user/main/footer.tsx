@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { EuiFlexGroup, EuiFlexItem } from '@elastic/eui';
 import { useEntityStoreEuidApi } from '@kbn/entity-store/public';
 import { TakeAction } from '../../../../flyout/entity_details/shared/components/take_action';
@@ -19,6 +19,8 @@ import { getRiskFromEntityRecord } from '../../../../flyout/entity_details/share
 import type { EntityToAttach } from '../../../../cases/attachments/entity';
 import { useEntityCaseTakeActionItems } from '../../../../cases/attachments/entity/hooks/use_entity_case_take_action_items';
 import { useInvalidateEntityGrid } from '../../../../entity_analytics/components/home/entities_grid/hooks/use_invalidate_entity_grid';
+import { useEntityWatchlistTakeActionItems } from '../../../../entity_analytics/watchlist_prototype/use_entity_watchlist_take_action_items';
+import { getUnionWatchlistIds } from '../../../../flyout/entity_details/shared/entity_store_group_utils';
 
 export interface FooterProps {
   /**
@@ -62,9 +64,16 @@ export const Footer = ({ userName, identityFields, entity }: FooterProps) => {
     [entityStoreId, identityUserName, riskLevel, riskScore]
   );
   const invalidateEntityGrid = useInvalidateEntityGrid();
-  const additionalItems = useEntityCaseTakeActionItems(entityToAttach, {
+  const caseItems = useEntityCaseTakeActionItems(entityToAttach, {
     onSuccess: invalidateEntityGrid,
   });
+  const watchlistIds = useMemo(() => getUnionWatchlistIds(entity ? [entity] : []), [entity]);
+  const { additionalItems: watchlistItems, modal: watchlistModal } =
+    useEntityWatchlistTakeActionItems({ entity: entityToAttach, watchlistIds });
+  const additionalItems = useCallback(
+    (closePopover: () => void) => [...caseItems(closePopover), ...watchlistItems(closePopover)],
+    [caseItems, watchlistItems]
+  );
 
   return (
     <EuiFlexGroup justifyContent="flexEnd" alignItems="center">
@@ -81,6 +90,7 @@ export const Footer = ({ userName, identityFields, entity }: FooterProps) => {
           kqlQuery={euidEntityFilter ?? `user.name: "${identityUserName}"`}
           additionalItems={additionalItems}
         />
+        {watchlistModal}
       </EuiFlexItem>
     </EuiFlexGroup>
   );

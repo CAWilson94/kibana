@@ -18,6 +18,7 @@ import {
   EuiToolTip,
 } from '@elastic/eui';
 import type { Row } from '../../common';
+import { useWatchlistPrototypeFeatures } from '../../../../../watchlist_prototype/watchlist_prototype_state';
 
 /** Takes its color from the button, so it follows the theme without reading it per row. */
 const GraphIcon = () => (
@@ -82,6 +83,8 @@ export const RowActionsCell: React.FC<RowActionsCellProps> = ({
   onAddToWatchlist,
 }) => {
   const [isMoreActionsOpen, setIsMoreActionsOpen] = useState(false);
+  // DESIGN PROTOTYPE, NOT FOR MERGE: v4 uses the list icon of the Take action menu, not the eye.
+  const { takeAction } = useWatchlistPrototypeFeatures();
   const moreActionsButton = (
     <EuiToolTip content={i18nStrings.moreActions} disableScreenReaderOutput>
       <EuiButtonIcon
@@ -169,7 +172,7 @@ export const RowActionsCell: React.FC<RowActionsCellProps> = ({
                     ? [
                         <EuiContextMenuItem
                           key="addToWatchlist"
-                          icon="eye"
+                          icon={takeAction ? 'listCheck' : 'eye'}
                           data-test-subj="eaGridRowAddToWatchlist"
                           onClick={() => {
                             setIsMoreActionsOpen(false);

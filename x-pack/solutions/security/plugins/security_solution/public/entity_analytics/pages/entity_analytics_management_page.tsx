@@ -26,6 +26,7 @@ import { useEntityEnginePrivileges } from '../components/entity_store/hooks/use_
 import { ENTITY_ANALYTICS_MANAGEMENT_PATH } from '../../../common/constants';
 import { userHasRiskEngineReadPermissions, userHasEntityStoreStopPrivileges } from '../common';
 import { EntityAnalyticsManagementHeader, TabId } from './entity_analytics_management_header';
+import { WatchlistPrototypeBar } from '../watchlist_prototype/watchlist_prototype_bar';
 
 export { TabId };
 
@@ -126,6 +127,7 @@ export const EntityAnalyticsManagementPage = () => {
         onSaveSettings={handleSaveToggleSettings}
         isSavingSettings={saveSelectedSettingsMutation.isLoading}
       />
+      <WatchlistPrototypeBar />
 
       {showEntityStoreEnablementCallout && (
         <>

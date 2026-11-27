@@ -36,6 +36,7 @@ import { WatchlistCsvUpload } from './csv_upload';
 import { ManagedWatchlistSourceInput } from './managed_watchlist_source_input';
 import { ManualEntitiesSection } from './manual_entities_section';
 import { useWatchlistManualEntitiesEnabled } from '../../../hooks/use_watchlist_manual_entities_enabled';
+import { WatchlistRuleHistory } from '../../../watchlist_prototype/watchlist_rule_history';
 import {
   MAX_WATCHLIST_DESCRIPTION_LENGTH,
   MAX_WATCHLIST_NAME_LENGTH,
@@ -172,6 +173,7 @@ export const WatchlistForm = ({
         indexSourceWithMissingApiKey={indexSourceWithMissingApiKey}
         ruleBasedSource={ruleBasedSource}
       />
+      {isEditMode && watchlistId && isManualEntitiesEnabled && <WatchlistRuleHistory />}
       {isEditMode && watchlistId && isManualEntitiesEnabled && (
         <ManualEntitiesSection watchlistId={watchlistId} watchlistName={watchlist.name} />
       )}

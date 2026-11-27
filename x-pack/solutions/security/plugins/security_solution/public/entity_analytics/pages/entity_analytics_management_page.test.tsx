@@ -142,6 +142,12 @@ jest.mock('../components/watchlists/watchlists_tab', () => ({
   WatchlistsTab: () => <span data-test-subj="mock-watchlists-tab">{'Mocked Watchlists Tab'}</span>,
 }));
 
+// DESIGN PROTOTYPE, NOT FOR MERGE: the version bar needs the feature flags service this test's
+// `useKibana` stub does not provide.
+jest.mock('../watchlist_prototype/watchlist_prototype_bar', () => ({
+  WatchlistPrototypeBar: () => null,
+}));
+
 jest.mock('../components/entity_store/components/entity_store_missing_privileges_callout', () => ({
   EntityStoreMissingPrivilegesCallout: () => (
     <span data-test-subj="entity-store-missing-privileges">

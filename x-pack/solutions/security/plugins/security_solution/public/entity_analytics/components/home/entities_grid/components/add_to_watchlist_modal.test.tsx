@@ -62,7 +62,10 @@ const renderModal = (assignedWatchlistIds: string[] = []) => {
 describe('AddToWatchlistModal', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    (useKibana as jest.Mock).mockReturnValue({ services: { notifications: { toasts } } });
+    // `featureFlags` is read by the prototype nudge hook (DESIGN PROTOTYPE, NOT FOR MERGE).
+    (useKibana as jest.Mock).mockReturnValue({
+      services: { notifications: { toasts }, featureFlags: { useBooleanValue: () => false } },
+    });
     (useSpaceId as jest.Mock).mockReturnValue('default');
     mockTableData();
     (useWatchlistFlyout as jest.Mock).mockImplementation(() => {
@@ -261,6 +264,29 @@ describe('AddToWatchlistModal', () => {
     fireEvent.click(screen.getByTestId('eaGridAddToWatchlistCreate'));
     expect(mockOpenCreate).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('mockCreateWatchlistFlyout')).toBeInTheDocument();
+  });
+
+  it('starts with the create watchlist flyout open when asked to (prototype v4)', () => {
+    render(
+      <TestProviders>
+        <AddToWatchlistModal
+          entityId="user:jane"
+          assignedWatchlistIds={[]}
+          onClose={jest.fn()}
+          onAssigned={jest.fn()}
+          startInCreateMode
+        />
+      </TestProviders>
+    );
+
+    expect(mockOpenCreate).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('mockCreateWatchlistFlyout')).toBeInTheDocument();
+  });
+
+  it('does not open the create flyout by itself otherwise', () => {
+    renderModal();
+
+    expect(mockOpenCreate).not.toHaveBeenCalled();
   });
 
   it('hides the modal while the create flyout is open', () => {

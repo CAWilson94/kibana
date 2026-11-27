@@ -22,6 +22,7 @@ import { createExceptionAttachmentType } from './exception';
 import { createInvestigationIocsAttachmentType } from './investigation_iocs';
 import { createInvestigationTimelineAttachmentType } from './investigation_timeline';
 import { createSiemReadinessAttachmentType } from './siem_readiness';
+import { createWatchlistAttachmentType } from './watchlist';
 import { createRulePreviewAttachmentType, getRulePreviewAlertCount } from './rule_preview';
 import { createRuleMigrationItemsAttachmentType } from './rule_migration_items';
 import { SIEM_READINESS_AGENT_BUILDER_ENABLED } from '../siem_readiness_feature_flag';
@@ -59,6 +60,7 @@ export const registerAttachments = async (
     agentBuilder.attachments.registerType(createEntityRiskScoreHistoryAttachmentType());
   }
   agentBuilder.attachments.registerType(createExceptionAttachmentType());
+  agentBuilder.attachments.registerType(createWatchlistAttachmentType());
   if (experimentalFeatures.endpointForensicAnalysisSkill) {
     agentBuilder.attachments.registerType(createInvestigationTimelineAttachmentType());
     agentBuilder.attachments.registerType(createInvestigationIocsAttachmentType());

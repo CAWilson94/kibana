@@ -89,6 +89,7 @@ import { useFlyoutApi } from '../../flyout_v2/use_flyout_api';
 import type { EntityViewMode } from '../../../common/entity_analytics/entity_store/resolution_group';
 import { FLYOUT_ORIGIN } from '../../common/lib/telemetry';
 import { EntityAnalyticsHomeHeader } from './entity_analytics_home_header';
+import { WatchlistPrototypeBar } from '../watchlist_prototype/watchlist_prototype_bar';
 import { usePinnedBarsHeight } from '../components/home/use_pinned_bars_height';
 import { GenerateAiBriefButton } from '../components/home/ai_brief/generate_ai_brief_button';
 import { useKibana } from '../../common/lib/kibana';
@@ -1543,6 +1544,7 @@ const EntityAnalyticsNewHomePageContent: React.FC<{
       {/* Unwrapped: a wrapper would stop the header from sticking. */}
       {!isGridFullScreen && <EntityAnalyticsHomeHeader onStartTour={productTour.startTour} />}
       <SecuritySolutionPageWrapper noPadding data-test-subj="entityAnalyticsNewHomePage">
+        <WatchlistPrototypeBar />
         <div
           className="entityAnalyticsSearchSection"
           css={[

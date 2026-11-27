@@ -30,6 +30,13 @@ jest.mock('../../../../common/lib/kibana', () => ({
   useKibana: () => mockUseKibana(),
 }));
 
+// DESIGN PROTOTYPE, NOT FOR MERGE: the watchlist items need services this test's `useKibana` stub
+// does not provide.
+jest.mock(
+  '../../../../entity_analytics/watchlist_prototype/use_entity_watchlist_take_action_items',
+  () => ({ useEntityWatchlistTakeActionItems: () => ({ additionalItems: () => [], modal: null }) })
+);
+
 // Render additionalItems inline so tests can assert on them without opening the popover.
 jest.mock('../../../../flyout/entity_details/shared/components/take_action', () => ({
   TakeAction: ({

@@ -337,6 +337,25 @@ export const registerEntityAnalyticsDashboardAttachment = ({
 };
 
 /**
+ * DESIGN PROTOTYPE, NOT FOR MERGE. Registers the `security.watchlist` attachment renderer.
+ * Dynamically imported, like the other renderers, to keep it off the main bundle.
+ */
+export const registerWatchlistAttachment = ({
+  attachments,
+  application,
+}: {
+  attachments: AttachmentServiceStartContract;
+  application: ApplicationStart;
+}): void => {
+  void import(
+    /* webpackChunkName: "security_watchlist_attachment" */
+    './watchlist_attachment'
+  ).then(({ registerWatchlistAttachment: register }) => {
+    register({ attachments, application });
+  });
+};
+
+/**
  * Registers the `security.entity_graph` attachment renderer (inline read-only
  * relationship-graph preview + "Open full graph" deep link). Dynamically imports
  * [./entity_graph](./entity_graph/index.ts) so the heavy graph deps
