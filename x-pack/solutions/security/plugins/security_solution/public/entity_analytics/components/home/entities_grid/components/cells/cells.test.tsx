@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useEuiTheme } from '@elastic/eui';
 import { TestProviders } from '../../../../../../common/mock';
 import type { Row } from '../../common';
@@ -19,6 +19,7 @@ import { EntityTypeCell } from './entity_type_cell';
 import { GroupSizeCell } from './group_size_cell';
 import { RiskScoreChangeCell } from './risk_score_change_cell';
 import { RowActionsCell } from './row_actions_cell';
+import { setWatchlistPrototypeVersion } from '../../../../../watchlist_prototype/watchlist_prototype_state';
 import { WatchlistsCell } from './watchlists_cell';
 
 const renderInProviders = (cell: React.ReactElement) =>
@@ -221,6 +222,37 @@ describe('RowActionsCell', () => {
     expect(screen.queryByText('Add to chat')).not.toBeInTheDocument();
     fireEvent.click(await screen.findByText('Add to watchlist'));
     expect(onAddToWatchlist).toHaveBeenCalledTimes(1);
+  });
+
+  describe('the "Add to watchlist" icon (prototype)', () => {
+    const openMenu = async () => {
+      renderInProviders(
+        <RowActionsCell onOpenEntityGraph={jest.fn()} onAddToWatchlist={jest.fn()} />
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+      return (await screen.findByText('Add to watchlist')).closest('button') as HTMLElement;
+    };
+
+    afterEach(() => {
+      act(() => setWatchlistPrototypeVersion('v1'));
+    });
+
+    it.each(['v1', 'v2', 'v3'] as const)('is the eye in %s, as in the PR', async (version) => {
+      act(() => setWatchlistPrototypeVersion(version));
+
+      const item = await openMenu();
+
+      expect(item.querySelector('[data-euiicon-type="eye"]')).not.toBeNull();
+    });
+
+    it('is the list icon of the Take action menu in v4', async () => {
+      act(() => setWatchlistPrototypeVersion('v4'));
+
+      const item = await openMenu();
+
+      expect(item.querySelector('[data-euiicon-type="listCheck"]')).not.toBeNull();
+      expect(item.querySelector('[data-euiicon-type="eye"]')).toBeNull();
+    });
   });
 
   it('hides the more actions menu without the agent chat', () => {

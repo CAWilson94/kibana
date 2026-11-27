@@ -7,4 +7,5 @@
 
 export * from './assign.gen';
 export * from './list_manual.gen';
+export * from './memberships.gen';
 export * from './unassign.gen';

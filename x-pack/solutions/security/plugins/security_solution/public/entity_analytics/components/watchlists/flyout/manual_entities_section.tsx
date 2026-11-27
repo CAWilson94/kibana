@@ -24,6 +24,7 @@ import type { WatchlistManualEntity } from '../../../../../common/api/entity_ana
 import { useManualWatchlistEntities } from '../../../api/hooks/use_manual_watchlist_entities';
 import { useUnassignWatchlistEntity } from '../../../api/hooks/use_unassign_watchlist_entity';
 import { useWatchlistsPrivileges } from '../../../api/hooks/use_watchlists_privileges';
+import { ManualEntitiesRuleCallout } from '../../../watchlist_prototype/manual_entities_rule_callout';
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
@@ -164,6 +165,7 @@ export const ManualEntitiesSection = ({
         </EuiFlexItem>
       </EuiFlexGroup>
       <EuiSpacer size="m" />
+      <ManualEntitiesRuleCallout watchlistId={watchlistId} watchlistName={watchlistName} />
       {isLoading ? (
         <EuiLoadingSpinner size="m" data-test-subj="watchlistManualEntitiesLoading" />
       ) : isError ? (

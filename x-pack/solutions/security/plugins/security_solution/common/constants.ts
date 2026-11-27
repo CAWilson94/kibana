@@ -766,6 +766,7 @@ export enum SecurityAgentBuilderAttachments {
   investigationTimeline = 'security.investigation.timeline',
   rule = 'security.rule',
   rulePreview = 'security.rule.preview',
+  watchlist = 'security.watchlist',
   ruleMigrationItems = 'security.siem_migration.rule_migration_items',
 }
 

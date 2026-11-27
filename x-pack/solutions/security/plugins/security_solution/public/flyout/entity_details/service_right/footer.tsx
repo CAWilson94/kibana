@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import type { EuiPanelProps } from '@elastic/eui';
 import { EuiFlyoutFooter, EuiFlexGroup, EuiFlexItem, useEuiTheme } from '@elastic/eui';
 import { css } from '@emotion/react';
@@ -20,6 +20,8 @@ import { AiAssistantButton } from '../../../entity_analytics/components/ai_assis
 import type { EntityToAttach } from '../../../cases/attachments/entity';
 import { useEntityCaseTakeActionItems } from '../../../cases/attachments/entity/hooks/use_entity_case_take_action_items';
 import { useInvalidateEntityGrid } from '../../../entity_analytics/components/home/entities_grid/hooks/use_invalidate_entity_grid';
+import { useEntityWatchlistTakeActionItems } from '../../../entity_analytics/watchlist_prototype/use_entity_watchlist_take_action_items';
+import { getUnionWatchlistIds } from '../shared/entity_store_group_utils';
 
 export const ServicePanelFooter = ({
   serviceName,
@@ -80,9 +82,16 @@ export const ServicePanelFooter = ({
     [entityStoreId, identityServiceName, riskLevel, riskScore]
   );
   const invalidateEntityGrid = useInvalidateEntityGrid();
-  const additionalItems = useEntityCaseTakeActionItems(entityToAttach, {
+  const caseItems = useEntityCaseTakeActionItems(entityToAttach, {
     onSuccess: invalidateEntityGrid,
   });
+  const watchlistIds = useMemo(() => getUnionWatchlistIds(entity ? [entity] : []), [entity]);
+  const { additionalItems: watchlistItems, modal: watchlistModal } =
+    useEntityWatchlistTakeActionItems({ entity: entityToAttach, watchlistIds });
+  const additionalItems = useCallback(
+    (closePopover: () => void) => [...caseItems(closePopover), ...watchlistItems(closePopover)],
+    [caseItems, watchlistItems]
+  );
   const { euiTheme } = useEuiTheme();
   const paddingSize = panelProps?.paddingSize ?? 'm';
 
@@ -112,6 +121,7 @@ export const ServicePanelFooter = ({
             kqlQuery={euidEntityFilter ?? `service.name: "${identityServiceName}"`}
             additionalItems={additionalItems}
           />
+          {watchlistModal}
         </EuiFlexItem>
       </EuiFlexGroup>
     </EuiFlyoutFooter>

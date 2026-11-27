@@ -411,6 +411,8 @@ export const AGENT_BUILDER_BUILTIN_ATTACHMENTS = [
   'security.investigation.timeline',
   'security.rule',
   'security.siem_readiness',
+  // design prototype: the watchlist the chat starts from
+  'security.watchlist',
   // gated behind experimentalFeatures.rulePreviewAttachmentEnabled
   'security.rule.preview',
   // gated behind !siemMigrationsDisabled && siemRuleMigrationsAgentBuilderEnabled

@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/react';
 import {
   EuiBasicTable,
@@ -40,6 +40,8 @@ import { useWatchlistFlyout } from '../../../watchlists/flyout/use_watchlist_fly
 import { buildWatchlistsDataColumns } from '../../../watchlists/components/watchlists_management_table/columns';
 import { useWatchlistsTableData } from '../../../watchlists/components/watchlists_management_table/hooks';
 import type { WatchlistTableItemType } from '../../../watchlists/components/watchlists_management_table/types';
+import { useAddedToWatchlistToast } from '../../../../watchlist_prototype/added_to_watchlist_toast';
+import type { AddedEntity } from '../../../../watchlist_prototype/added_to_watchlist_toast';
 
 const i18nStrings = {
   title: i18n.translate('xpack.securitySolution.entityAnalytics.home.addToWatchlist.modalTitle', {
@@ -152,9 +154,10 @@ const compareBy = (field: SortField, direction: 'asc' | 'desc') => {
  * a scrollbar and every source readable.
  */
 const COLUMN_OVERRIDES: Record<string, Partial<EuiBasicTableColumn<WatchlistTableItemType>>> = {
-  name: { width: '9em', truncateText: true },
-  entityCount: { name: i18nStrings.entitiesColumn },
-  riskModifier: { name: i18nStrings.weightingColumn },
+  name: { width: '12em', truncateText: true },
+  // Just wide enough for the header and its sort icon: the count itself is short.
+  entityCount: { name: i18nStrings.entitiesColumn, width: '6.5em' },
+  riskModifier: { name: i18nStrings.weightingColumn, width: '9em' },
   source: {
     width: '12em',
     render: (value: string | undefined) =>
@@ -208,7 +211,17 @@ export interface AddToWatchlistModalProps {
   onClose: () => void;
   /** Called after the entity was added, so the grid refetches. */
   onAssigned: () => void;
+  /** The entity's type and name, for the prototype's chat prompt. Taken from the id when omitted. */
+  entity?: AddedEntity;
+  /** Starts with the create watchlist flyout open (DESIGN PROTOTYPE, NOT FOR MERGE). */
+  startInCreateMode?: boolean;
 }
+
+/** An entity id looks like `user:jane`: the type, then the name. */
+const getEntityFromEuid = (euid: string): AddedEntity => {
+  const [type, ...rest] = euid.split(':');
+  return { type, name: rest.join(':') };
+};
 
 /**
  * Picks the watchlist to add one entity to, laid out like the cases "Select case" modal.
@@ -219,11 +232,14 @@ export const AddToWatchlistModal: React.FC<AddToWatchlistModalProps> = ({
   assignedWatchlistIds,
   onClose,
   onAssigned,
+  entity,
+  startInCreateMode,
 }) => {
   const modalTitleId = useGeneratedHtmlId();
   const {
     notifications: { toasts },
   } = useKibana().services;
+  const showAddedToast = useAddedToWatchlistToast();
   const spaceId = useSpaceId();
   const { visibleRecords, isLoading, hasError, refetch } = useWatchlistsTableData(
     spaceId ?? '',
@@ -233,6 +249,13 @@ export const AddToWatchlistModal: React.FC<AddToWatchlistModalProps> = ({
   const isTableLoading = isLoading || !spaceId;
   const { assignWatchlistEntities } = useEntityAnalyticsRoutes();
   const { openCreate, flyout } = useWatchlistFlyout(spaceId);
+  const didStartCreate = useRef(false);
+  useEffect(() => {
+    if (startInCreateMode && !didStartCreate.current) {
+      didStartCreate.current = true;
+      openCreate();
+    }
+  }, [startInCreateMode, openCreate]);
   const [search, setSearch] = useState('');
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
@@ -253,9 +276,15 @@ export const AddToWatchlistModal: React.FC<AddToWatchlistModalProps> = ({
         );
       }
     },
-    onSuccess: () => {
+    onSuccess: (_data, watchlistId) => {
       onAssigned();
-      toasts.addSuccess({ title: i18nStrings.successToastTitle });
+      showAddedToast({
+        title: i18nStrings.successToastTitle,
+        watchlistId,
+        watchlistName: visibleRecords.find(({ id }) => id === watchlistId)?.name,
+        watchlist: visibleRecords.find(({ id }) => id === watchlistId),
+        entity: entity ?? getEntityFromEuid(entityId),
+      });
       onClose();
     },
     onError: (error: Error) => {
@@ -445,7 +474,7 @@ export const AddToWatchlistModal: React.FC<AddToWatchlistModalProps> = ({
                   }}
                   sorting={{ sort }}
                   onChange={onTableChange}
-                  tableLayout="auto"
+                  tableLayout="fixed"
                   responsiveBreakpoint={false}
                   css={TABLE_EDGES_CSS}
                   noItemsMessage={

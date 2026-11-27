@@ -91,6 +91,7 @@ import {
   registerAttackDiscoveryAttachment,
   registerAttackDiscoveryVerdictAttachment,
   registerEntityAnalyticsDashboardAttachment,
+  registerWatchlistAttachment,
   registerEntityRiskScoreHistoryAttachment,
   registerEntityAttachment,
   registerEntityGraphAttachment,
@@ -419,6 +420,10 @@ export class Plugin implements IPlugin<PluginSetup, PluginStart, SetupPlugins, S
         experimentalFeatures: this.experimentalFeatures,
         searchSession: plugins.data.search.session,
         uiSettings: core.uiSettings,
+      });
+      registerWatchlistAttachment({
+        attachments: plugins.agentBuilder.attachments,
+        application: core.application,
       });
       registerEntityGraphAttachment({
         attachments: plugins.agentBuilder.attachments,
